@@ -56,7 +56,7 @@ func TestResolve_ReturnsFromEnv_WhenSystemMisses(t *testing.T) {
 	if key != "sk-test-resolve-456" {
 		// Don't fail — the developer might have a real key in Keychain that
 		// takes precedence. Skip in that case.
-		t.Skipf("system keyring returned %q (probably has a real entry); env-fallback path not exercised", key)
+		t.Skip("system keyring has a real entry that intercepted the test; env-fallback path not exercised")
 	}
 	if store.Source() != EnvVar+" env var" {
 		t.Errorf("Source = %q, want env-var", store.Source())
