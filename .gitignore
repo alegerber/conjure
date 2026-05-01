@@ -12,3 +12,10 @@
 
 # Worktrees (local isolated workspaces, not for tracking)
 .worktrees/
+
+# Go
+/conjure
+/dist/
+*.test
+*.out
+coverage.txt
