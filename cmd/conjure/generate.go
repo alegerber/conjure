@@ -32,8 +32,9 @@ func defaultModel() string {
 func defaultMaxTokens() int {
 	if v := os.Getenv("CONJURE_MAX_TOKENS"); v != "" {
 		var n int
-		_, _ = fmt.Sscanf(v, "%d", &n)
-		if n > 0 {
+		if _, err := fmt.Sscanf(v, "%d", &n); err != nil || n <= 0 {
+			fmt.Fprintf(os.Stderr, "conjure: ignoring invalid CONJURE_MAX_TOKENS=%q (want positive integer)\n", v)
+		} else {
 			return n
 		}
 	}
@@ -54,7 +55,7 @@ func envExplain() bool {
 func runGenerate(opts generateOpts, description string) error {
 	_, key, err := keyring.Resolve()
 	if err != nil {
-		return fmt.Errorf("API key not found. Run: conjure setup  (or set %s)", keyring.EnvVar)
+		return fmt.Errorf("API key not found. Run: conjure setup (or set %s)", keyring.EnvVar)
 	}
 	osHint := defaultOS()
 	systemPrompt := prompt.BuildSystem(osHint)
