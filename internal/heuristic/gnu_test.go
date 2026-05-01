@@ -10,12 +10,12 @@ func TestCheckGNU_DarwinFlagsKnownPatterns(t *testing.T) {
 		cmd  string
 		want string
 	}{
-		{"find . -printf '%s\\n'", "find -printf"},
-		{"ls --color=auto", "--color=auto"},
-		{"stat -c '%s' file", "stat -c"},
-		{"date -d 'yesterday'", "date -d"},
-		{"readlink -f /tmp/x", "readlink -f"},
-		{"sed -i 's/a/b/' file", "sed -i"},
+		{"find . -printf '%s\\n'", "'find -printf' is GNU-only; use 'find -exec stat -f ... {} +'"},
+		{"ls --color=auto", "'--color=auto' is GNU-only on macOS; ls accepts -G instead"},
+		{"stat -c '%s' file", "'stat -c' is GNU-only; macOS uses 'stat -f'"},
+		{"date -d 'yesterday'", "'date -d' is GNU-only; macOS uses 'date -v' (e.g. 'date -v-1d')"},
+		{"readlink -f /tmp/x", "'readlink -f' is GNU-only; use 'realpath' or 'cd ... && pwd'"},
+		{"sed -i 's/a/b/' file", "'sed -i' on macOS needs an empty backup arg: sed -i '' 'PATTERN'"},
 	}
 	for _, tc := range cases {
 		hits := CheckGNU(tc.cmd, "darwin")

@@ -5,6 +5,11 @@ import "strings"
 // CheckGNU returns warning strings (each one human-readable) when known
 // GNU-only flags appear in cmd while os is "darwin". Returns nil for non-Darwin
 // or when no patterns match.
+//
+// Pattern matching is substring-based (intentionally simple). It can produce
+// false positives on quoted strings or composite words ("xfind -printf",
+// echo "stat -c is bad"). The output is labelled as a "heuristic warning",
+// so occasional noise is acceptable.
 func CheckGNU(cmd, os string) []string {
 	if strings.ToLower(os) != "darwin" {
 		return nil
@@ -25,7 +30,8 @@ func CheckGNU(cmd, os string) []string {
 	if strings.Contains(cmd, "readlink -f") {
 		hits = append(hits, "'readlink -f' is GNU-only; use 'realpath' or 'cd ... && pwd'")
 	}
-	// "sed -i 'X'" without the BSD "" backup arg right after -i.
+	// Catch GNU "sed -i 'PATTERN'" without the BSD-required empty backup arg.
+	// Known false positive: "sed -i '.bak' 'PATTERN'" (named backup) also matches.
 	if strings.Contains(cmd, "sed -i '") && !strings.Contains(cmd, "sed -i ''") {
 		hits = append(hits, "'sed -i' on macOS needs an empty backup arg: sed -i '' 'PATTERN'")
 	}
