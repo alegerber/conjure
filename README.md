@@ -6,11 +6,12 @@
 $ conjure "list all .md files recursively"
 find . -type f -name "*.md"
 
-$ conjure "find files modified in the last 7 days"
+$ conjure -e "find files modified in the last 7 days"
 find . -type f -mtime -7
+# Finds all files modified within the last 7 days, recursively from the current directory.
 
 $ cj "show top 3 largest directories"
-du -sh */ | sort -rh | head -3
+# (zsh-only) command lands editable in the next prompt, ready to edit or run
 ```
 
 A small bash CLI that calls the Anthropic Messages API directly — no Claude
@@ -65,9 +66,28 @@ never written to disk in plain text.
 ## Usage
 
 ```sh
-conjure "<description>"
-cj      "<description>"     # zsh-only short alias
+conjure "<description>"          # plain command, ~0.85s
+conjure -e "<description>"       # command + brief explanation, ~1.3s
+conjure --no-explain "..."       # force plain output (overrides CONJURE_EXPLAIN)
+cj "<description>"               # zsh-only: pushes command into the editor buffer
 ```
+
+### Explain mode
+
+With `-e` / `--explain`, conjure uses the Anthropic [tool use](https://docs.anthropic.com/en/docs/agents-and-tools/tool-use/overview)
+API for structured output, returning two lines:
+
+```
+<command>
+# <one-sentence explanation>
+```
+
+This costs roughly +400ms and ~+50 tokens compared to plain mode. To enable
+by default, set `CONJURE_EXPLAIN=1`; override per-call with `--no-explain`.
+
+In the zsh `cj` function, the command goes into the editor buffer (via
+`print -z`) and the explanation is printed above the next prompt — so you
+read the explanation, then edit/run the command.
 
 ### Environment overrides
 
@@ -76,6 +96,7 @@ cj      "<description>"     # zsh-only short alias
 | `CONJURE_MODEL` | `claude-haiku-4-5` | Anthropic model id (e.g. `claude-sonnet-4-6`) |
 | `CONJURE_MAX_TOKENS` | `256` | Max output tokens |
 | `CONJURE_OS` | auto-detected | OS hint shown to the model (`Darwin` / `Linux`) |
+| `CONJURE_EXPLAIN` | `0` | Set to `1` to default to `--explain` |
 
 ```sh
 CONJURE_MODEL=claude-sonnet-4-6 conjure "complicated multi-step pipeline"

@@ -18,14 +18,33 @@ fi
 
 # `cj <description>` — generate a command and place it in the prompt buffer
 # (via `print -z`). The next prompt shows the command, ready to edit or run.
-# Setup commands like `--setup` are passed through and printed normally.
+#
+# Behavior:
+#   - First line of `conjure` output is treated as the command and pushed
+#     into the ZLE editor buffer.
+#   - Any remaining lines (e.g. the `# explanation` from --explain) are
+#     printed to stdout, so you see them above the next prompt.
+#   - Subcommands (--setup, --version, --help) pass through and print
+#     normally without buffer manipulation.
 cj() {
-  if [[ "$1" == --* ]]; then
-    conjure "$@"
-    return $?
+  case "$1" in
+    --setup|--version|-v|--help|-h)
+      conjure "$@"
+      return $?
+      ;;
+  esac
+  local output
+  output=$(conjure "$@") || return $?
+  [[ -z "$output" ]] && return 0
+
+  local cmd=${output%%$'\n'*}
+  local rest=""
+  if [[ "$output" == *$'\n'* ]]; then
+    rest=${output#*$'\n'}
+    rest=${rest%$'\n'}
   fi
-  local cmd
-  cmd=$(conjure "$@") || return $?
+
+  [[ -n "$rest" ]] && print -r -- "$rest"
   [[ -n "$cmd" ]] && print -z -- "$cmd"
 }
 

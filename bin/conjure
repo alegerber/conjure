@@ -3,15 +3,20 @@
 # conjure — natural-language → Unix command, via the Anthropic Messages API.
 #
 # Usage:
-#   conjure "<description>"        Generate a command
+#   conjure "<description>"        Generate a command (fast, ~0.85s)
+#   conjure -e "<description>"     Generate command + brief explanation (~1.3s)
+#   conjure --no-explain "..."     Force plain output (overrides CONJURE_EXPLAIN)
 #   conjure --setup                Store API key in macOS Keychain (one-time)
 #   conjure --version              Print version
 #   conjure --help                 Show this help
+#
+# With --explain, output is two lines: command, then a `# explanation` comment.
 #
 # Environment overrides:
 #   CONJURE_MODEL        Anthropic model id        (default: claude-haiku-4-5)
 #   CONJURE_MAX_TOKENS   Max output tokens         (default: 256)
 #   CONJURE_OS           OS hint for the prompt    (default: auto-detected)
+#   CONJURE_EXPLAIN      Default to --explain      (set to 1; override per-call)
 #
 
 set -uo pipefail
@@ -20,7 +25,7 @@ CONJURE_VERSION="0.1.0"
 KEYCHAIN_SERVICE="anthropic-api-key"
 
 usage() {
-  sed -n '3,15p' "$0" | sed 's/^# \{0,1\}//'
+  sed -n '3,21p' "$0" | sed 's/^# \{0,1\}//'
 }
 
 err() { printf '%s\n' "$*" >&2; }
@@ -76,6 +81,8 @@ cmd_setup() {
 }
 
 cmd_generate() {
+  local explain=$1; shift
+
   require_cmd jq "brew install jq"
   require_cmd curl
   require_cmd security "macOS only — 'security' is not available."
@@ -97,15 +104,42 @@ cmd_generate() {
     *)      shell_hint="$os_hint shell" ;;
   esac
 
-  local prompt
-  prompt="Output ONLY a single-line Unix command for $shell_hint. No markdown fences, no explanation, no leading/trailing whitespace. Task: $*"
-
-  local body
-  body=$(jq -nc \
-    --arg model "$model" \
-    --arg prompt "$prompt" \
-    --argjson max_tokens "$max_tokens" \
-    '{model: $model, max_tokens: $max_tokens, messages: [{role: "user", content: $prompt}]}')
+  local body prompt
+  if [ "$explain" = "1" ]; then
+    # Tool-use mode: model must call emit_command with structured args.
+    prompt="Generate a single-line Unix command for $shell_hint and a brief one-sentence explanation. Task: $*"
+    local tool_schema
+    tool_schema=$(jq -nc \
+      '{
+        name: "emit_command",
+        description: "Emit the generated Unix command and a brief explanation",
+        input_schema: {
+          type: "object",
+          properties: {
+            command: {type: "string", description: "Single-line Unix command, no markdown fences, no surrounding whitespace"},
+            explanation: {type: "string", description: "Brief one-sentence explanation of what the command does"}
+          },
+          required: ["command", "explanation"]
+        }
+      }')
+    body=$(jq -nc \
+      --arg model "$model" \
+      --arg prompt "$prompt" \
+      --argjson max_tokens "$max_tokens" \
+      --argjson tool "$tool_schema" \
+      '{model: $model, max_tokens: $max_tokens,
+        messages: [{role: "user", content: $prompt}],
+        tools: [$tool],
+        tool_choice: {type: "tool", name: "emit_command"}}')
+  else
+    # Plain-text mode: model returns just the command line.
+    prompt="Output ONLY a single-line Unix command for $shell_hint. No markdown fences, no explanation, no leading/trailing whitespace. Task: $*"
+    body=$(jq -nc \
+      --arg model "$model" \
+      --arg prompt "$prompt" \
+      --argjson max_tokens "$max_tokens" \
+      '{model: $model, max_tokens: $max_tokens, messages: [{role: "user", content: $prompt}]}')
+  fi
 
   local response
   response=$(curl -sS https://api.anthropic.com/v1/messages \
@@ -124,6 +158,26 @@ cmd_generate() {
   if [ -n "$api_err" ]; then
     err "conjure: API error: $api_err"
     return 1
+  fi
+
+  if [ "$explain" = "1" ]; then
+    local input cmd explanation
+    input=$(printf '%s' "$response" | jq -c '.content[] | select(.type == "tool_use") | .input' | head -1)
+    if [ -z "$input" ]; then
+      err "conjure: no tool_use in response"
+      err "raw: $response"
+      return 1
+    fi
+    cmd=$(printf '%s' "$input" | jq -r '.command // empty')
+    explanation=$(printf '%s' "$input" | jq -r '.explanation // empty')
+    if [ -z "$cmd" ]; then
+      err "conjure: tool_use returned empty command"
+      err "raw: $input"
+      return 1
+    fi
+    printf '%s\n' "$cmd"
+    [ -n "$explanation" ] && printf '# %s\n' "$explanation"
+    return 0
   fi
 
   local cmd
@@ -151,13 +205,33 @@ main() {
     usage
     return 1
   fi
+
+  # Subcommand-style flags consume the whole invocation.
   case "$1" in
-    -h|--help)    usage ;;
-    -v|--version) printf 'conjure %s\n' "$CONJURE_VERSION" ;;
-    --setup)      cmd_setup ;;
-    --*)          err "conjure: unknown flag '$1'"; usage; return 1 ;;
-    *)            cmd_generate "$@" ;;
+    -h|--help)    usage; return 0 ;;
+    -v|--version) printf 'conjure %s\n' "$CONJURE_VERSION"; return 0 ;;
+    --setup)      cmd_setup; return $? ;;
   esac
+
+  # Generation flags. Env-var sets the default; flags override per-call.
+  local explain="${CONJURE_EXPLAIN:-0}"
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      -e|--explain)    explain=1; shift ;;
+      --no-explain)    explain=0; shift ;;
+      --)              shift; break ;;
+      --*|-?)          err "conjure: unknown flag '$1'"; usage; return 1 ;;
+      *)               break ;;
+    esac
+  done
+
+  if [ $# -eq 0 ]; then
+    err "conjure: missing description"
+    usage
+    return 1
+  fi
+
+  cmd_generate "$explain" "$@"
 }
 
 main "$@"
