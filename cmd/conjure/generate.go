@@ -10,6 +10,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/alegerber/conjure/internal/api"
+	"github.com/alegerber/conjure/internal/clipboard"
 	"github.com/alegerber/conjure/internal/heuristic"
 	"github.com/alegerber/conjure/internal/keyring"
 	"github.com/alegerber/conjure/internal/prompt"
@@ -85,6 +86,17 @@ func runGenerate(opts generateOpts, description string) error {
 	if explanation != "" {
 		fmt.Printf("# %s\n", explanation)
 	}
+
+	if opts.copy {
+		c, err := clipboard.New()
+		if err != nil {
+			return fmt.Errorf("--copy: %w", err)
+		}
+		if err := c.Copy(cmdLine); err != nil {
+			return fmt.Errorf("--copy: %w", err)
+		}
+		fmt.Fprintf(os.Stderr, "conjure: copied via %s\n", c.Source())
+	}
 	return nil
 }
 
@@ -101,6 +113,7 @@ func resolveExplain(flagExplain, flagNoExplain bool) bool {
 func attachGenerateFlags(cmd *cobra.Command, opts *generateOpts) {
 	cmd.Flags().BoolVarP(&opts.explain, "explain", "e", false, "Generate command + brief explanation (uses tool-use)")
 	cmd.Flags().BoolVar(&opts.noEx, "no-explain", false, "Force plain output (overrides CONJURE_EXPLAIN)")
+	cmd.Flags().BoolVar(&opts.copy, "copy", false, "Copy generated command to system clipboard")
 }
 
 // rootRunE is wired into the root command so `conjure "<description>"` works
