@@ -9,6 +9,8 @@ import (
 
 type systemStore struct{ user string }
 
+var _ Store = systemStore{}
+
 func NewSystemStore() (Store, error) {
 	u, err := user.Current()
 	if err != nil {
