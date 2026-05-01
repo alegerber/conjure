@@ -25,6 +25,18 @@ func TestGeneratePlain_StripsFencesAndReturnsCommand(t *testing.T) {
 		if !strings.HasPrefix(req.Messages[0].Content, "Task: ") {
 			t.Errorf("user message = %q, want Task: prefix", req.Messages[0].Content)
 		}
+		if len(req.System) != 1 {
+			t.Fatalf("len(req.System) = %d, want 1", len(req.System))
+		}
+		if req.System[0].CacheControl == nil || req.System[0].CacheControl.Type != "ephemeral" {
+			t.Errorf("system[0].cache_control = %+v, want ephemeral", req.System[0].CacheControl)
+		}
+		if req.Model != "claude-haiku-4-5" {
+			t.Errorf("model = %q, want claude-haiku-4-5", req.Model)
+		}
+		if req.MaxTokens != 256 {
+			t.Errorf("max_tokens = %d, want 256", req.MaxTokens)
+		}
 		w.Header().Set("content-type", "application/json")
 		// Return a fenced code block so that stripFences is exercised.
 		// Wire JSON: {"content":[{"type":"text","text":"```\nfind . -name '*.md'\n```\n"}]}
@@ -46,6 +58,27 @@ func TestGeneratePlain_StripsFencesAndReturnsCommand(t *testing.T) {
 	want := "find . -name '*.md'"
 	if got != want {
 		t.Errorf("got %q, want %q", got, want)
+	}
+}
+
+func TestStripFences_PreservesInnerBackticks(t *testing.T) {
+	cases := []struct {
+		name, in, want string
+	}{
+		{"plain", "ls -la", "ls -la"},
+		{"fenced", "```\nls -la\n```", "ls -la"},
+		{"fenced with lang", "```sh\nls -la\n```", "ls -la"},
+		{"inline backticks", "`ls -la`", "ls -la"},
+		{"command with inner backticks", "echo `date`", "echo `date`"},
+		{"fenced with inner backticks", "```\necho `date`\n```", "echo `date`"},
+		{"surrounding whitespace", "  \nls\n  ", "ls"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := stripFences(tc.in); got != tc.want {
+				t.Errorf("stripFences(%q) = %q, want %q", tc.in, got, tc.want)
+			}
+		})
 	}
 }
 

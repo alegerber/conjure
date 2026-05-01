@@ -101,7 +101,10 @@ func stripFences(s string) string {
 	}
 	for _, line := range lines {
 		if t := strings.TrimSpace(line); t != "" {
-			return strings.Trim(t, "`")
+			if len(t) >= 2 && strings.HasPrefix(t, "`") && strings.HasSuffix(t, "`") {
+				return t[1 : len(t)-1]
+			}
+			return t
 		}
 	}
 	return ""
