@@ -40,3 +40,38 @@ func TestEnvStore_Source(t *testing.T) {
 		t.Errorf("Source = %q, want %q", got, EnvVar+" env var")
 	}
 }
+
+func TestResolve_ReturnsFromEnv_WhenSystemMisses(t *testing.T) {
+	// We can't reliably test the system-keyring branch in unit tests (requires
+	// platform daemon). This test covers the env-fallback path: assumes the
+	// system keyring has no entry for the test user (true in CI, true on a
+	// fresh dev machine), then sets the env var and asserts Resolve picks it up.
+	t.Setenv(EnvVar, "sk-test-resolve-456")
+	store, key, err := Resolve()
+	if err != nil {
+		t.Fatalf("Resolve: %v", err)
+	}
+	// The store could be either env or system depending on what's in the
+	// developer's actual keyring. Assert on the key value, which differs.
+	if key != "sk-test-resolve-456" {
+		// Don't fail — the developer might have a real key in Keychain that
+		// takes precedence. Skip in that case.
+		t.Skipf("system keyring returned %q (probably has a real entry); env-fallback path not exercised", key)
+	}
+	if store.Source() != EnvVar+" env var" {
+		t.Errorf("Source = %q, want env-var", store.Source())
+	}
+}
+
+func TestResolve_BothMissReturnsErrNotFound(t *testing.T) {
+	// Same caveat: if the developer has a real Keychain entry, this test will
+	// get a successful Resolve. Skip in that case.
+	t.Setenv(EnvVar, "")
+	_, _, err := Resolve()
+	if err == nil {
+		t.Skip("system keyring has an entry for this user; can't test the both-miss path here")
+	}
+	if !errors.Is(err, ErrNotFound) {
+		t.Errorf("err = %v, want ErrNotFound", err)
+	}
+}

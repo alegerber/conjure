@@ -14,3 +14,19 @@ type Store interface {
 	Set(key string) error
 	Source() string // human-readable origin, used in error messages
 }
+
+// Resolve returns the first store that yields a key. It tries the system
+// keyring first, then falls back to the env var. The returned Store reports
+// where the key came from via Source(). If neither has a key, ErrNotFound.
+func Resolve() (Store, string, error) {
+	if sys, err := NewSystemStore(); err == nil {
+		if v, err := sys.Get(); err == nil {
+			return sys, v, nil
+		}
+	}
+	env := NewEnvStore()
+	if v, err := env.Get(); err == nil {
+		return env, v, nil
+	}
+	return nil, "", ErrNotFound
+}
