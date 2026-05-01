@@ -1,0 +1,11 @@
+# macOS
+.DS_Store
+
+# Editor swap / backup files
+*.swp
+*.swo
+*~
+
+# Editor / IDE local config (uncomment if you don't want to share)
+# .idea/
+# .vscode/
