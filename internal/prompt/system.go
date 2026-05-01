@@ -38,9 +38,10 @@ CRITICAL RULES:
 4. Quote arguments that may contain spaces, globs, or special chars.
 `
 
-// BuildSystem returns an OS-aware system prompt. `os` should be a Go
-// runtime.GOOS-style identifier ("darwin", "linux", "windows", ...). For
-// unknown values, returns a POSIX-portable fallback.
+// BuildSystem returns an OS-aware system prompt for the given operating
+// system. os should be a runtime.GOOS-style lowercase identifier ("darwin",
+// "linux", "windows", ...); mixed-case values such as "Darwin" are accepted.
+// For unrecognised values, a POSIX-portable fallback is returned.
 func BuildSystem(os string) string {
 	switch strings.ToLower(os) {
 	case "darwin":
