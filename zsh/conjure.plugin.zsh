@@ -2,12 +2,13 @@
 # conjure — zsh integration (oh-my-zsh plugin)
 #
 # This is a thin wrapper. The actual logic lives in `bin/conjure` (a
-# portable bash script). This file just adds zsh-specific niceties:
-#   - the `cj` short alias
-#   - tab completion for env-var hints
+# portable bash script). This file adds zsh-specific niceties:
+#   - the `cj` function: pushes the generated command into the editor buffer
+#     so you can review/edit before pressing Enter
+#   - tab completion
 #
 # The CLI must be on PATH (e.g. via a symlink in ~/.local/bin/conjure
-# created by install.sh). If it isn't, the alias will fail loudly.
+# created by install.sh). If it isn't, the function will fail loudly.
 #
 
 if (( ! $+commands[conjure] )); then
@@ -15,9 +16,20 @@ if (( ! $+commands[conjure] )); then
   return 1
 fi
 
-alias cj=conjure
+# `cj <description>` — generate a command and place it in the prompt buffer
+# (via `print -z`). The next prompt shows the command, ready to edit or run.
+# Setup commands like `--setup` are passed through and printed normally.
+cj() {
+  if [[ "$1" == --* ]]; then
+    conjure "$@"
+    return $?
+  fi
+  local cmd
+  cmd=$(conjure "$@") || return $?
+  [[ -n "$cmd" ]] && print -z -- "$cmd"
+}
 
-# Minimal completion: suggest the documented flags after `conjure`.
+# Minimal completion: suggest the documented flags after `conjure` / `cj`.
 _conjure() {
   _arguments \
     '--setup[Store API key in macOS Keychain]' \
