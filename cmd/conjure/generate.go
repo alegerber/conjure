@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"runtime"
@@ -14,6 +15,7 @@ import (
 	"github.com/alegerber/conjure/internal/heuristic"
 	"github.com/alegerber/conjure/internal/keyring"
 	"github.com/alegerber/conjure/internal/prompt"
+	"github.com/alegerber/conjure/internal/runner"
 )
 
 type generateOpts struct {
@@ -97,6 +99,15 @@ func runGenerate(opts generateOpts, description string) error {
 		}
 		fmt.Fprintf(os.Stderr, "conjure: copied via %s\n", c.Source())
 	}
+
+	if opts.run {
+		err := runner.ConfirmAndRun(cmdLine, os.Stdin, os.Stdout)
+		if errors.Is(err, runner.ErrAborted) {
+			fmt.Fprintln(os.Stderr, "conjure: aborted")
+			return nil
+		}
+		return err
+	}
 	return nil
 }
 
@@ -114,6 +125,7 @@ func attachGenerateFlags(cmd *cobra.Command, opts *generateOpts) {
 	cmd.Flags().BoolVarP(&opts.explain, "explain", "e", false, "Generate command + brief explanation (uses tool-use)")
 	cmd.Flags().BoolVar(&opts.noEx, "no-explain", false, "Force plain output (overrides CONJURE_EXPLAIN)")
 	cmd.Flags().BoolVar(&opts.copy, "copy", false, "Copy generated command to system clipboard")
+	cmd.Flags().BoolVar(&opts.run, "run", false, "After printing, prompt to execute the command")
 }
 
 // rootRunE is wired into the root command so `conjure "<description>"` works
