@@ -2,34 +2,34 @@
 
 > Natural-language → Unix command, in under a second.
 
-A zsh plugin that turns sentences like *"find the 5 largest files"* into actual
-shell commands by calling the Anthropic Messages API directly. No Claude Code
-overhead, no MCP boot, no plugin discovery — just `curl` and `jq`.
-
-```zsh
+```sh
 $ conjure "list all .md files recursively"
-find . -name "*.md" -type f
+find . -type f -name "*.md"
 
-$ cj "5 largest files in this tree"
-find . -type f -exec ls -lh {} \; | sort -k5 -hr | head -5
+$ conjure "find files modified in the last 7 days"
+find . -type f -mtime -7
+
+$ cj "show top 3 largest directories"
+du -sh */ | sort -rh | head -3
 ```
 
-## Why direct API instead of `claude -p`?
+A small bash CLI that calls the Anthropic Messages API directly — no Claude
+Code, no MCP, no plugin discovery. Just `curl` and `jq`.
 
-Benchmarked locally on macOS:
+## Why?
 
 | Approach | Latency |
 |---|---|
 | `claude -p` with `--json-schema` and full plugin/MCP boot | ~19s |
 | `claude -p` with minimal flags + plain text | ~3.7s |
-| **Direct Anthropic API + plain text** (this plugin) | **~0.85s** |
+| **conjure** (direct API + plain text) | **~0.85s** |
 
 That's a **~22× speedup** for the same kind of result.
 
 ## Requirements
 
-- macOS (uses Keychain via `security`)
-- `zsh` + [oh-my-zsh](https://ohmyz.sh/)
+- macOS (uses Keychain via `security`) — Linux support is on the roadmap
+- `bash` 3.2+ (preinstalled on macOS)
 - `curl` (preinstalled)
 - `jq` — `brew install jq`
 - An Anthropic API key — get one at
@@ -37,39 +37,36 @@ That's a **~22× speedup** for the same kind of result.
 
 ## Install
 
-```zsh
-git clone https://github.com/alegerber/zsh-conjure \
-  ${ZSH_CUSTOM:-~/.oh-my-zsh/custom}/plugins/conjure
+```sh
+git clone https://github.com/alegerber/conjure ~/github/conjure
+cd ~/github/conjure
+./install.sh
 ```
 
-Then add `conjure` to your `plugins=(...)` array in `~/.zshrc`:
+The installer:
 
-```zsh
-plugins=(
-  git
-  # ...
-  conjure
-)
-```
+- creates a symlink at `~/.local/bin/conjure` (override with `BIN_DIR=`)
+- if oh-my-zsh is detected, links the optional zsh plugin (gives you the `cj`
+  short alias and tab completion)
 
-Reload your shell: `source ~/.zshrc` (or open a new terminal).
+Make sure `~/.local/bin` is on your `$PATH`. If you use the zsh plugin, add
+`conjure` to your `plugins=(...)` array in `~/.zshrc`.
 
 ## First-time setup
 
-Run once to store your API key in the macOS Keychain:
-
-```zsh
-conjure-setup
+```sh
+conjure --setup
 ```
 
-The key is stored under the service name `anthropic-api-key` for your user. It
-is read on demand and never written to disk in plain text.
+This prompts for your API key (input hidden) and stores it in the macOS
+Keychain under service `anthropic-api-key`. The key is read on demand and
+never written to disk in plain text.
 
 ## Usage
 
-```zsh
+```sh
 conjure "<description>"
-cj      "<description>"     # short alias
+cj      "<description>"     # zsh-only short alias
 ```
 
 ### Environment overrides
@@ -78,22 +75,24 @@ cj      "<description>"     # short alias
 |---|---|---|
 | `CONJURE_MODEL` | `claude-haiku-4-5` | Anthropic model id (e.g. `claude-sonnet-4-6`) |
 | `CONJURE_MAX_TOKENS` | `256` | Max output tokens |
+| `CONJURE_OS` | auto-detected | OS hint shown to the model (`Darwin` / `Linux`) |
 
-```zsh
+```sh
 CONJURE_MODEL=claude-sonnet-4-6 conjure "complicated multi-step pipeline"
 ```
 
 ### Piping the result
 
-Since output is plain text, you can pipe it:
+Output is plain text, so pipe it freely:
 
-```zsh
-conjure "list .md files" | pbcopy             # copy to clipboard
-eval "$(conjure 'list .md files')"            # ⚠️ run directly — review first!
+```sh
+conjure "list .md files" | pbcopy             # copy to clipboard (macOS)
+eval "$(conjure 'list .md files')"            # run directly — review first!
 ```
 
-> **Safety note:** `eval` on AI-generated commands is dangerous. Always read the
-> command before running. Consider a confirmation wrapper if you do this often.
+> **Safety note:** `eval` on AI-generated commands is dangerous. Always read
+> the command before running. Consider a confirmation wrapper if you do this
+> often.
 
 ## Cost
 
@@ -102,20 +101,37 @@ Each call uses ~200 input + ~80 output tokens with Haiku 4.5 → about
 
 ## Name conflict
 
-This plugin shadows ImageMagick's `conjure` (MSL script interpreter). If you
-need ImageMagick's `conjure`, invoke it explicitly:
+The `conjure` binary shadows ImageMagick's `conjure` (an MSL script
+interpreter, rarely used). If you need ImageMagick's version, invoke it
+explicitly:
 
-```zsh
-\conjure              # bypass shell function lookup
-/opt/homebrew/bin/conjure
+```sh
+\conjure                        # bypass shell function/PATH lookup
+/opt/homebrew/bin/conjure       # full path
 ```
 
 ## Uninstall
 
-```zsh
-# remove plugin from plugins=(...) in ~/.zshrc, then:
-rm -rf ${ZSH_CUSTOM:-~/.oh-my-zsh/custom}/plugins/conjure
+```sh
+cd ~/github/conjure && ./install.sh --uninstall
+```
+
+This removes the symlinks. Your API key in Keychain is kept by default; remove
+it with:
+
+```sh
 security delete-generic-password -a "$USER" -s "anthropic-api-key"
+```
+
+## Project layout
+
+```
+conjure/
+├── bin/conjure              # main CLI (portable bash)
+├── zsh/conjure.plugin.zsh   # optional oh-my-zsh wrapper (alias + completion)
+├── install.sh               # symlink installer
+├── README.md
+└── LICENSE
 ```
 
 ## License
