@@ -109,6 +109,18 @@ func TestGenerateExplain_ReturnsCommandAndExplanation(t *testing.T) {
 		if req.ToolChoice == nil || req.ToolChoice.Type != "tool" || req.ToolChoice.Name != "emit_command" {
 			t.Errorf("tool_choice = %+v", req.ToolChoice)
 		}
+		if len(req.System) != 1 {
+			t.Fatalf("len(req.System) = %d, want 1", len(req.System))
+		}
+		if req.System[0].CacheControl == nil || req.System[0].CacheControl.Type != "ephemeral" {
+			t.Errorf("system[0].cache_control = %+v, want ephemeral", req.System[0].CacheControl)
+		}
+		if req.Model != "m" {
+			t.Errorf("model = %q, want m", req.Model)
+		}
+		if req.MaxTokens != 256 {
+			t.Errorf("max_tokens = %d, want 256", req.MaxTokens)
+		}
 		w.Header().Set("content-type", "application/json")
 		_, _ = w.Write([]byte(`{"content":[{"type":"tool_use","name":"emit_command","input":{"command":"ls -la","explanation":"Lists files."}}]}`))
 	}))
@@ -125,5 +137,11 @@ func TestGenerateExplain_ReturnsCommandAndExplanation(t *testing.T) {
 	}
 	if out.Explanation != "Lists files." {
 		t.Errorf("Explanation = %q", out.Explanation)
+	}
+}
+
+func TestEmitCommandSchema_IsValidJSON(t *testing.T) {
+	if !json.Valid([]byte(emitCommandSchema)) {
+		t.Fatalf("emitCommandSchema is not valid JSON: %s", emitCommandSchema)
 	}
 }
