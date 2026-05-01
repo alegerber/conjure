@@ -9,3 +9,6 @@
 # Editor / IDE local config (uncomment if you don't want to share)
 # .idea/
 # .vscode/
+
+# Worktrees (local isolated workspaces, not for tracking)
+.worktrees/
