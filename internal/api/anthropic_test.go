@@ -96,3 +96,34 @@ func TestGeneratePlain_APIErrorIsReturned(t *testing.T) {
 		t.Errorf("err = %v, want contain 'bad model'", err)
 	}
 }
+
+func TestGenerateExplain_ReturnsCommandAndExplanation(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var req Request
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			t.Fatalf("decode: %v", err)
+		}
+		if len(req.Tools) != 1 || req.Tools[0].Name != "emit_command" {
+			t.Errorf("tools = %+v, want one tool named emit_command", req.Tools)
+		}
+		if req.ToolChoice == nil || req.ToolChoice.Type != "tool" || req.ToolChoice.Name != "emit_command" {
+			t.Errorf("tool_choice = %+v", req.ToolChoice)
+		}
+		w.Header().Set("content-type", "application/json")
+		_, _ = w.Write([]byte(`{"content":[{"type":"tool_use","name":"emit_command","input":{"command":"ls -la","explanation":"Lists files."}}]}`))
+	}))
+	defer srv.Close()
+
+	c := New("k", "m", 256)
+	c.Endpoint = srv.URL
+	out, err := c.GenerateExplain(context.Background(), "sys", "list files")
+	if err != nil {
+		t.Fatalf("GenerateExplain: %v", err)
+	}
+	if out.Command != "ls -la" {
+		t.Errorf("Command = %q", out.Command)
+	}
+	if out.Explanation != "Lists files." {
+		t.Errorf("Explanation = %q", out.Explanation)
+	}
+}
