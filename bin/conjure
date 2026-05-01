@@ -50,6 +50,97 @@ keychain_set() {
   security add-generic-password -a "$USER" -s "$KEYCHAIN_SERVICE" -w "$1" -U
 }
 
+# --- System prompt + heuristic check ----------------------------------------
+
+# Build an OS-aware system prompt with concrete GNU↔BSD examples.
+# Sent with cache_control: ephemeral (5min) so we pay for it once per window.
+build_system_prompt() {
+  local os=$1
+  case "$os" in
+    Darwin)
+      cat <<'EOF'
+You translate natural-language descriptions into single-line Unix commands.
+Target system: macOS (Darwin) with zsh and BSD coreutils.
+
+CRITICAL RULES:
+1. Output exactly ONE command line. No markdown fences. No explanation prose.
+2. Prefer BSD/POSIX syntax. NEVER use GNU-only flags. NEVER use:
+   --color=auto, find -printf, date -d, stat -c, sed -i 'PATTERN' (without ''),
+   xargs -d, ls --quoting-style, --files0-from, readlink -f.
+3. Use idiomatic macOS commands: ls -G, sed -i '' 'PATTERN', stat -f, date -v.
+4. Prefer `-exec ... {} +` over `-exec ... \;` for performance.
+5. Quote arguments that may contain spaces, globs, or special chars.
+
+GNU-bad → BSD-good examples:
+  find . -printf '%s %f\n'         →  find . -exec stat -f '%z %N' {} +
+  sed -i 's/a/b/' file             →  sed -i '' 's/a/b/' file
+  date -d "1 day ago" +%Y-%m-%d    →  date -v-1d +%Y-%m-%d
+  stat -c '%s' file                →  stat -f '%z' file
+  ls --color=auto                  →  ls -G
+  readlink -f path                 →  realpath path     (or: cd path && pwd)
+  find . -type f | xargs -d '\n'   →  find . -type f -print0 | xargs -0
+EOF
+      ;;
+    Linux)
+      cat <<'EOF'
+You translate natural-language descriptions into single-line Unix commands.
+Target system: Linux with bash and GNU coreutils.
+
+CRITICAL RULES:
+1. Output exactly ONE command line. No markdown fences. No explanation prose.
+2. Use idiomatic GNU syntax: stat -c, date -d, sed -i 'PATTERN' (no empty arg),
+   find -printf, readlink -f, xargs -d.
+3. Prefer `-exec ... {} +` over `-exec ... \;` for performance.
+4. Quote arguments that may contain spaces, globs, or special chars.
+EOF
+      ;;
+    *)
+      cat <<EOF
+You translate natural-language descriptions into single-line POSIX shell commands
+for $os. Output exactly ONE command line. No markdown. Prefer POSIX-portable syntax.
+EOF
+      ;;
+  esac
+}
+
+# Print warnings to stderr if the command contains known GNU-only patterns
+# while we're targeting macOS. Non-fatal — just a hint.
+check_gnu_isms() {
+  local cmd=$1 os=$2
+  [ "$os" = "Darwin" ] || return 0
+
+  local hits=""
+  case "$cmd" in
+    *"find "*"-printf"*)        hits="$hits\n  - 'find -printf' is GNU-only; use 'find -exec stat -f ... {} +'" ;;
+  esac
+  case "$cmd" in
+    *"--color=auto"*)           hits="$hits\n  - '--color=auto' is GNU-only on macOS; ls accepts -G instead" ;;
+  esac
+  case "$cmd" in
+    *"stat -c"*)                hits="$hits\n  - 'stat -c' is GNU-only; macOS uses 'stat -f'" ;;
+  esac
+  case "$cmd" in
+    *"date -d "*)               hits="$hits\n  - 'date -d' is GNU-only; macOS uses 'date -v' (e.g. 'date -v-1d')" ;;
+  esac
+  case "$cmd" in
+    *"readlink -f"*)            hits="$hits\n  - 'readlink -f' is GNU-only; use 'realpath' or 'cd ... && pwd'" ;;
+  esac
+  # sed -i without empty '' arg right after — heuristic, may have false positives
+  case "$cmd" in
+    *"sed -i '"*)
+      case "$cmd" in
+        *"sed -i ''"*) ;;
+        *) hits="$hits\n  - 'sed -i' on macOS needs an empty backup arg: sed -i '' 'PATTERN'" ;;
+      esac
+      ;;
+  esac
+
+  if [ -n "$hits" ]; then
+    err "conjure: heuristic warning — possible GNU syntax in command:"
+    printf '%b\n' "$hits" >&2
+  fi
+}
+
 # --- Subcommands -------------------------------------------------------------
 
 cmd_setup() {
@@ -97,17 +188,20 @@ cmd_generate() {
   local model="${CONJURE_MODEL:-claude-haiku-4-5}"
   local max_tokens="${CONJURE_MAX_TOKENS:-256}"
   local os_hint="${CONJURE_OS:-$(uname -s)}"
-  local shell_hint
-  case "$os_hint" in
-    Darwin) shell_hint="macOS/zsh, BSD coreutils (use 'stat -f', 'sed -i \"\"' etc.)" ;;
-    Linux)  shell_hint="Linux/bash, GNU coreutils" ;;
-    *)      shell_hint="$os_hint shell" ;;
-  esac
+
+  # System prompt is OS-specific. We tag it with cache_control: ephemeral (5min)
+  # so it caches automatically when eligible — Anthropic only caches blocks at
+  # or above ~1024 tokens (Sonnet/Opus) / ~2048 tokens (Haiku). Our prompt is
+  # ~350 tokens, so the cache_control is a no-op on Haiku today, but starts
+  # working free-of-charge if you switch to Sonnet via CONJURE_MODEL or grow
+  # the prompt. See: https://docs.anthropic.com/en/docs/build-with-claude/prompt-caching
+  local system_text
+  system_text=$(build_system_prompt "$os_hint")
 
   local body prompt
   if [ "$explain" = "1" ]; then
     # Tool-use mode: model must call emit_command with structured args.
-    prompt="Generate a single-line Unix command for $shell_hint and a brief one-sentence explanation. Task: $*"
+    prompt="Task: $*"
     local tool_schema
     tool_schema=$(jq -nc \
       '{
@@ -125,20 +219,25 @@ cmd_generate() {
     body=$(jq -nc \
       --arg model "$model" \
       --arg prompt "$prompt" \
+      --arg system "$system_text" \
       --argjson max_tokens "$max_tokens" \
       --argjson tool "$tool_schema" \
       '{model: $model, max_tokens: $max_tokens,
+        system: [{type: "text", text: $system, cache_control: {type: "ephemeral"}}],
         messages: [{role: "user", content: $prompt}],
         tools: [$tool],
         tool_choice: {type: "tool", name: "emit_command"}}')
   else
     # Plain-text mode: model returns just the command line.
-    prompt="Output ONLY a single-line Unix command for $shell_hint. No markdown fences, no explanation, no leading/trailing whitespace. Task: $*"
+    prompt="Task: $*"
     body=$(jq -nc \
       --arg model "$model" \
       --arg prompt "$prompt" \
+      --arg system "$system_text" \
       --argjson max_tokens "$max_tokens" \
-      '{model: $model, max_tokens: $max_tokens, messages: [{role: "user", content: $prompt}]}')
+      '{model: $model, max_tokens: $max_tokens,
+        system: [{type: "text", text: $system, cache_control: {type: "ephemeral"}}],
+        messages: [{role: "user", content: $prompt}]}')
   fi
 
   local response
@@ -175,6 +274,7 @@ cmd_generate() {
       err "raw: $input"
       return 1
     fi
+    check_gnu_isms "$cmd" "$os_hint"
     printf '%s\n' "$cmd"
     [ -n "$explanation" ] && printf '# %s\n' "$explanation"
     return 0
@@ -195,6 +295,7 @@ cmd_generate() {
     | sed -E 's/^`(.*)`$/\1/' \
     | awk 'NF{print; exit}')
 
+  check_gnu_isms "$cmd" "$os_hint"
   printf '%s\n' "$cmd"
 }
 

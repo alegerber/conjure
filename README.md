@@ -23,9 +23,11 @@ Code, no MCP, no plugin discovery. Just `curl` and `jq`.
 |---|---|
 | `claude -p` with `--json-schema` and full plugin/MCP boot | ~19s |
 | `claude -p` with minimal flags + plain text | ~3.7s |
-| **conjure** (direct API + plain text) | **~0.85s** |
+| **conjure** (direct API + plain text) | **~1.0s** |
+| conjure with `--explain` (tool use) | ~1.3s |
 
-That's a **~22× speedup** for the same kind of result.
+That's a **~19× speedup** for the same kind of result, with materially better
+output quality on macOS (BSD coreutils) — see *OS-aware system prompt* below.
 
 ## Requirements
 
@@ -88,6 +90,20 @@ by default, set `CONJURE_EXPLAIN=1`; override per-call with `--no-explain`.
 In the zsh `cj` function, the command goes into the editor buffer (via
 `print -z`) and the explanation is printed above the next prompt — so you
 read the explanation, then edit/run the command.
+
+### OS-aware system prompt
+
+conjure ships an OS-specific system prompt (visible in `bin/conjure`) that
+explicitly forbids GNU-only flags on macOS and shows GNU↔BSD examples
+(`find -printf` → `find -exec stat -f`, `sed -i 'X'` → `sed -i '' 'X'`,
+`date -d` → `date -v`, etc.). A small heuristic check warns on stderr if a
+known-bad GNU pattern slips through anyway.
+
+The system prompt is tagged `cache_control: ephemeral` for Anthropic prompt
+caching, but the prompt is currently ~350 tokens — below Haiku's 2048-token
+cache threshold, so caching is effectively a no-op on the default model.
+It starts working free-of-charge if you switch to Sonnet (1024-token
+threshold) via `CONJURE_MODEL=claude-sonnet-4-6`.
 
 ### Environment overrides
 
