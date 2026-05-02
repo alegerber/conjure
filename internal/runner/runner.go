@@ -17,7 +17,7 @@ var ErrAborted = errors.New("aborted by user")
 // the command via the platform's default shell. stdout/stderr go to out.
 // On Windows it shells out via "cmd /C"; elsewhere via "sh -c".
 func ConfirmAndRun(cmd string, in io.Reader, out io.Writer) error {
-	fmt.Fprintf(out, "Run this command? [y/N]\n  %s\n> ", cmd)
+	_, _ = fmt.Fprintf(out, "Run this command? [y/N]\n  %s\n> ", cmd)
 	reader := bufio.NewReader(in)
 	ans, err := reader.ReadString('\n')
 	if err != nil && err != io.EOF {

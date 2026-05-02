@@ -161,9 +161,9 @@ func (c *Client) do(ctx context.Context, body chatRequest) (*chatResponse, error
 
 	httpResp, err := c.HTTPClient.Do(httpReq)
 	if err != nil {
-		return nil, fmt.Errorf("Ollama call failed (is it running at %s?): %w", c.Host, err)
+		return nil, fmt.Errorf("ollama call failed (is it running at %s?): %w", c.Host, err)
 	}
-	defer httpResp.Body.Close()
+	defer func() { _ = httpResp.Body.Close() }()
 
 	respBytes, err := io.ReadAll(httpResp.Body)
 	if err != nil {
@@ -174,7 +174,7 @@ func (c *Client) do(ctx context.Context, body chatRequest) (*chatResponse, error
 		return nil, fmt.Errorf("decode response: %w (body: %s)", err, string(respBytes))
 	}
 	if resp.Error != "" {
-		return nil, fmt.Errorf("Ollama error: %s", resp.Error)
+		return nil, fmt.Errorf("ollama error: %s", resp.Error)
 	}
 	return &resp, nil
 }

@@ -79,7 +79,7 @@ func resolveProvider(cfg *config.Config, opts generateOpts) (provider.Provider, 
 	case provider.KindAnthropic:
 		_, k, err := keyring.ResolveFor(anthropicprov.KeyringService, anthropicprov.EnvVar)
 		if err != nil {
-			return nil, fmt.Errorf("Anthropic API key not found. Run: conjure setup (or set %s)", anthropicprov.EnvVar)
+			return nil, fmt.Errorf("anthropic API key not found. Run: conjure setup (or set %s)", anthropicprov.EnvVar)
 		}
 		key = k
 	case provider.KindOpenAI:

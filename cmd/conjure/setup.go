@@ -32,13 +32,13 @@ func newSetupCmd() *cobra.Command {
 
 func runSetup(stdin io.Reader, stdout io.Writer) error {
 	reader := bufio.NewReader(stdin)
-	fmt.Fprintln(stdout, "Which provider do you want to use?")
-	fmt.Fprintln(stdout, "  [1] anthropic    — Anthropic API (per-token billing)")
-	fmt.Fprintln(stdout, "  [2] openai       — OpenAI API (per-token billing)")
-	fmt.Fprintln(stdout, "  [3] ollama       — Local Ollama (no auth)")
-	fmt.Fprintln(stdout, "  [4] codex        — ChatGPT Plus/Pro via Codex CLI credentials")
-	fmt.Fprintln(stdout, "  [5] claude-cli   — Claude Pro/Max via the `claude` CLI (slower)")
-	fmt.Fprint(stdout, "Choice [1]: ")
+	_, _ = fmt.Fprintln(stdout, "Which provider do you want to use?")
+	_, _ = fmt.Fprintln(stdout, "  [1] anthropic    — Anthropic API (per-token billing)")
+	_, _ = fmt.Fprintln(stdout, "  [2] openai       — OpenAI API (per-token billing)")
+	_, _ = fmt.Fprintln(stdout, "  [3] ollama       — Local Ollama (no auth)")
+	_, _ = fmt.Fprintln(stdout, "  [4] codex        — ChatGPT Plus/Pro via Codex CLI credentials")
+	_, _ = fmt.Fprintln(stdout, "  [5] claude-cli   — Claude Pro/Max via the `claude` CLI (slower)")
+	_, _ = fmt.Fprint(stdout, "Choice [1]: ")
 	choice, _ := reader.ReadString('\n')
 	choice = strings.TrimSpace(choice)
 	if choice == "" {
@@ -83,14 +83,14 @@ func runSetup(stdin io.Reader, stdout io.Writer) error {
 		if _, err := codex.LoadAPIKey(path); err != nil {
 			return err
 		}
-		fmt.Fprintf(stdout, "✓ Using Codex CLI credentials from %s.\n", path)
+		_, _ = fmt.Fprintf(stdout, "✓ Using Codex CLI credentials from %s.\n", path)
 		cfg.Provider = string(provider.KindCodex)
 		cfg.Model = promptModel(reader, stdout, provider.KindCodex, cfg.Model)
 	case "5", "claude-cli", "claude":
 		if err := claudecli.LookPath(); err != nil {
 			return err
 		}
-		fmt.Fprintln(stdout, "✓ `claude` CLI found on PATH.")
+		_, _ = fmt.Fprintln(stdout, "✓ `claude` CLI found on PATH.")
 		cfg.Provider = string(provider.KindClaudeCLI)
 		cfg.Model = "" // claude CLI picks its own model
 	default:
@@ -101,7 +101,7 @@ func runSetup(stdin io.Reader, stdout io.Writer) error {
 		return fmt.Errorf("save config: %w", err)
 	}
 	p, _ := config.Path()
-	fmt.Fprintf(stdout, "✓ Saved config to %s.\n", p)
+	_, _ = fmt.Fprintf(stdout, "✓ Saved config to %s.\n", p)
 	return nil
 }
 
@@ -111,18 +111,18 @@ func setupAPIKey(stdout io.Writer, service, label, helpURL string) error {
 		return fmt.Errorf("init keyring: %w", err)
 	}
 	if existing, err := store.Get(); err == nil && existing != "" {
-		fmt.Fprintf(stdout, "A %s key is already stored. Overwrite? [y/N] ", label)
+		_, _ = fmt.Fprintf(stdout, "A %s key is already stored. Overwrite? [y/N] ", label)
 		reader := bufio.NewReader(os.Stdin)
 		ans, _ := reader.ReadString('\n')
 		if a := strings.TrimSpace(strings.ToLower(ans)); a != "y" && a != "yes" {
-			fmt.Fprintln(stdout, "Keeping existing key.")
+			_, _ = fmt.Fprintln(stdout, "Keeping existing key.")
 			return nil
 		}
 	}
 
-	fmt.Fprintf(stdout, "%s API key (hidden, get one at %s): ", label, helpURL)
+	_, _ = fmt.Fprintf(stdout, "%s API key (hidden, get one at %s): ", label, helpURL)
 	keyBytes, err := term.ReadPassword(int(os.Stdin.Fd()))
-	fmt.Fprintln(stdout)
+	_, _ = fmt.Fprintln(stdout)
 	if err != nil {
 		return fmt.Errorf("read input: %w", err)
 	}
@@ -133,15 +133,15 @@ func setupAPIKey(stdout io.Writer, service, label, helpURL string) error {
 	if err := store.Set(key); err != nil {
 		return fmt.Errorf("write keyring: %w", err)
 	}
-	fmt.Fprintf(stdout, "✓ %s key stored in %s.\n", label, store.Source())
+	_, _ = fmt.Fprintf(stdout, "✓ %s key stored in %s.\n", label, store.Source())
 	return nil
 }
 
 func promptString(reader *bufio.Reader, stdout io.Writer, label, dflt string) string {
 	if dflt != "" {
-		fmt.Fprintf(stdout, "%s [%s]: ", label, dflt)
+		_, _ = fmt.Fprintf(stdout, "%s [%s]: ", label, dflt)
 	} else {
-		fmt.Fprintf(stdout, "%s: ", label)
+		_, _ = fmt.Fprintf(stdout, "%s: ", label)
 	}
 	v, _ := reader.ReadString('\n')
 	v = strings.TrimSpace(v)
