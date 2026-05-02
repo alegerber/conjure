@@ -72,9 +72,13 @@ func runSetup(stdin io.Reader, stdout io.Writer) error {
 			return fmt.Errorf("ollama: a model is required (e.g. `ollama pull llama3.1`)")
 		}
 	case "4", "codex":
-		path, err := codex.DefaultAuthFile()
-		if err != nil {
-			return err
+		path := cfg.CodexAuthFile
+		if path == "" {
+			var err error
+			path, err = codex.DefaultAuthFile()
+			if err != nil {
+				return err
+			}
 		}
 		if _, err := codex.LoadAPIKey(path); err != nil {
 			return err

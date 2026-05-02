@@ -54,8 +54,8 @@ conjure/
 
 **1. Plain generation (`conjure "..."`)**
 - Resolve provider via `cmd/conjure/generate.go:resolveProvider` —
-  `--provider` flag > `CONJURE_PROVIDER` env > `config.Provider` > legacy
-  default (anthropic, if a keyring entry exists).
+  `--provider` flag > `config.Provider` > legacy default (anthropic, if a
+  keyring entry exists).
 - For API-key providers, resolve credentials via
   `keyring.ResolveFor(service, envVar)`.
 - Build OS-aware system prompt (`prompt.BuildSystem(runtime.GOOS)`).
@@ -122,7 +122,8 @@ go test ./... -race -count=1
 Per-package highlights:
 - `internal/provider/anthropic|openai|ollama` — each uses `httptest.Server`
   to assert request shape and decode forced tool-use responses.
-- `internal/provider/codex` — fixture-driven (`CONJURE_CODEX_AUTH_FILE`).
+- `internal/provider/codex` — fixture-driven (auth file path passed
+  directly to `LoadAPIKey`).
 - `internal/provider/claudecli` — fakes `exec.Command` via the `os.Args[0]`
   re-exec trick (see `TestHelperProcess`).
 - `internal/config` — round-trips Save/Load through a temp `XDG_CONFIG_HOME`.
@@ -138,8 +139,7 @@ API smoke checks (require live key; not run in CI):
 ```sh
 conjure "list .md files recursively"
 conjure -e "find files modified today"
-CONJURE_EXPLAIN=1 conjure "..."
-conjure --no-explain "..."
+conjure --no-explain "..."   # override config explain=true
 conjure --copy "list files"
 conjure --run "echo hello"
 ```
@@ -200,13 +200,14 @@ Structured output uses Tool Use (`tools` + forced `tool_choice`), never
 Default model `gpt-4o-mini`. Keyring service `openai-api-key`, env
 fallback `OPENAI_API_KEY`. Override base URL via `config.openai_base_url`.
 
-**`ollama`** — `$OLLAMA_HOST/api/chat` (default `http://localhost:11434`).
+**`ollama`** — `<ollama_host>/api/chat` (default `http://localhost:11434`,
+configured via `ollama_host` in the config file).
 Body uses OpenAI-style `tools`. Note that tool-call `arguments` arrive as a
 JSON object (not a stringified one, unlike OpenAI). No default model — must
 be set in config or via `--model`.
 
 **`codex`** — wraps the `openai` client but reads the API key from
-`~/.codex/auth.json` (override with `CONJURE_CODEX_AUTH_FILE` for tests).
+`~/.codex/auth.json` (override via `codex_auth_file` in the config file).
 Reports `Name() == "codex"` so logs disambiguate. Out-of-scope for the
 speed budget — same latency as `openai` though.
 
@@ -245,7 +246,7 @@ When adding a new flag:
 ### Updating docs
 
 - New CLI flag → update README.md (Usage / Flags table) and `cmd.Long`.
-- New env var → README's "Environment overrides" table.
+- New config field → README's "Configuration file" table.
 - Behavior change → mention in README and bump `Version` in `cmd/conjure/main.go`.
 
 ### Telling humans things

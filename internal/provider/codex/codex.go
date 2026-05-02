@@ -14,14 +14,8 @@ import (
 	"github.com/alegerber/conjure/internal/provider/openai"
 )
 
-// AuthFileEnvVar lets tests point Codex at a fixture instead of $HOME.
-const AuthFileEnvVar = "CONJURE_CODEX_AUTH_FILE"
-
 // DefaultAuthFile returns the conventional path to Codex's auth file.
 func DefaultAuthFile() (string, error) {
-	if v := os.Getenv(AuthFileEnvVar); v != "" {
-		return v, nil
-	}
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return "", err
