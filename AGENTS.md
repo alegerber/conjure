@@ -6,12 +6,16 @@
 ## Project
 
 **conjure** is a small, fast CLI that turns natural-language descriptions
-into single-line Unix commands by calling the Anthropic Messages API
-directly. As of 0.2.0 it ships as a single static Go binary; no `curl`,
-`jq`, or shell-runtime dependencies on the user side.
+into single-line Unix commands. As of 0.3.0 it speaks to five backends
+(Anthropic / OpenAI / Ollama / Codex CLI credentials / Claude CLI) behind a
+common `provider.Provider` interface, and ships as a single static Go binary
+— no `curl`, `jq`, or shell-runtime dependencies on the user side.
 
 Why it exists: `claude -p` with full plugin/MCP boot took ~19s per call;
-direct API + plain text is ~1.0s. The 19× speedup is the entire point.
+direct API + plain text is ~1.0s. The 19× speedup is the entire point on
+the pay-per-token providers (anthropic / openai). The subscription modes
+(`codex`, `claude-cli`) trade speed for "use the plan I'm already paying
+for" — they're explicitly out-of-scope for the speed budget.
 
 ## Architecture
 
@@ -24,10 +28,17 @@ conjure/
 │   ├── setup.go                # `conjure setup` (write key to keyring)
 │   └── shell_init.go           # `conjure shell-init [zsh|bash|fish|powershell]`
 ├── internal/
-│   ├── api/                    # Anthropic Messages client (mockable transport)
+│   ├── provider/               # Provider interface + Spec + Kind enum
+│   │   ├── anthropic/          # Anthropic Messages client (mockable transport)
+│   │   ├── openai/             # OpenAI Chat Completions client
+│   │   ├── ollama/             # local Ollama (/api/chat) client
+│   │   ├── codex/              # reads ~/.codex/auth.json, wraps openai client
+│   │   ├── claudecli/          # exec.Command wrapper around `claude -p`
+│   │   └── factory/            # New(spec, key) → concrete Provider
+│   ├── config/                 # ~/.config/conjure/config.json (Load/Save)
 │   ├── prompt/                 # OS-aware system-prompt builder
 │   ├── heuristic/              # GNU-vs-BSD warning heuristic
-│   ├── keyring/                # system keyring + env-var fallback (Resolve())
+│   ├── keyring/                # system keyring + env-var fallback (ResolveFor())
 │   ├── clipboard/              # cross-platform copy (pbcopy/xclip/wl-copy/clip.exe)
 │   ├── runner/                 # `--run` confirm prompt + exec
 │   └── shell/                  # embedded shell-init templates + Render()
@@ -42,17 +53,25 @@ conjure/
 ### Key flows
 
 **1. Plain generation (`conjure "..."`)**
-- Resolve API key via `keyring.Resolve()` (system keyring → `ANTHROPIC_API_KEY` fallback)
-- Build OS-aware system prompt (`prompt.BuildSystem(runtime.GOOS)`)
-- POST to `https://api.anthropic.com/v1/messages` via `internal/api`
-- Strip markdown fences, run `heuristic.CheckGNU(cmd, os)` warning
-- Print to stdout; optionally pipe to clipboard (`--copy`) or runner (`--run`)
+- Resolve provider via `cmd/conjure/generate.go:resolveProvider` —
+  `--provider` flag > `CONJURE_PROVIDER` env > `config.Provider` > legacy
+  default (anthropic, if a keyring entry exists).
+- For API-key providers, resolve credentials via
+  `keyring.ResolveFor(service, envVar)`.
+- Build OS-aware system prompt (`prompt.BuildSystem(runtime.GOOS)`).
+- Hand off to the chosen `provider.Provider`; strip markdown fences (the
+  HTTP backends do this internally), run `heuristic.CheckGNU(cmd, os)`.
+- Print to stdout; optionally pipe to clipboard (`--copy`) or runner (`--run`).
 
 **2. Explain mode (`conjure -e "..."`)**
-- Same as above, but the request body adds:
-  - `tools: [{name: "emit_command", input_schema: {command, explanation}}]`
-  - `tool_choice: {type: "tool", name: "emit_command"}` (forced)
-- Output: `<command>\n# <explanation>\n`
+- Same resolution path. Each provider implements `GenerateExplain`:
+  - `anthropic`: forced Tool Use (`tools` + `tool_choice: {type:"tool"}`).
+  - `openai` / `ollama`: forced function call
+    (`tool_choice: {type:"function"}`).
+  - `codex`: delegates to the `openai` client.
+  - `claude-cli`: instructs `claude -p` to emit `<command>\n# <expl>` and
+    parses on `\n#` (no native tool-use mode through the CLI).
+- Output: `<command>\n# <explanation>\n`.
 
 **3. Shell integration (`eval "$(conjure shell-init zsh)"`)**
 - `internal/shell` embeds four templates (zsh/bash/fish/powershell) via `//go:embed`
@@ -62,8 +81,11 @@ conjure/
 - Subcommand pass-through (`setup`, `--version`, `--help`) skips the split.
 
 **4. Subcommands**
-- `conjure setup` — interactive prompt (no echo, via `golang.org/x/term`),
-  writes to keyring under service `anthropic-api-key`, account `$USER`.
+- `conjure setup` — interactive picker: choose provider, then either
+  prompt for an API key (no echo, via `golang.org/x/term`) and write to a
+  per-provider keyring service, point at an Ollama host, verify the Codex
+  auth file, or check `claude` is on `PATH`. Persists the choice to
+  `~/.config/conjure/config.json`.
 - `conjure shell-init <shell>` — emits the embedded integration script.
 
 ## Setup for development
@@ -80,9 +102,13 @@ go install ./cmd/conjure
 conjure setup
 ```
 
-The keyring entry is `service=anthropic-api-key`, `account=$USER` on every
-platform (macOS Keychain, freedesktop Secret Service on Linux, Credential
-Manager on Windows). Override at runtime with `ANTHROPIC_API_KEY=...`.
+Keyring entries are stored per-provider:
+`service=anthropic-api-key` for the Anthropic key, `service=openai-api-key`
+for the OpenAI key, both under `account=$USER`. Resolution uses
+`keyring.ResolveFor(service, envVar)`: system keyring first, then env-var
+fallback (`ANTHROPIC_API_KEY` / `OPENAI_API_KEY`). The `codex` provider
+ignores the keyring entirely and reads `~/.codex/auth.json`; `ollama` and
+`claude-cli` need no credentials at all.
 
 ## Testing
 
@@ -94,7 +120,12 @@ go test ./... -race -count=1
 ```
 
 Per-package highlights:
-- `internal/api` — mocks `http.RoundTripper`; covers plain + tool-use + error paths.
+- `internal/provider/anthropic|openai|ollama` — each uses `httptest.Server`
+  to assert request shape and decode forced tool-use responses.
+- `internal/provider/codex` — fixture-driven (`CONJURE_CODEX_AUTH_FILE`).
+- `internal/provider/claudecli` — fakes `exec.Command` via the `os.Args[0]`
+  re-exec trick (see `TestHelperProcess`).
+- `internal/config` — round-trips Save/Load through a temp `XDG_CONFIG_HOME`.
 - `internal/prompt` — string-content assertions per `runtime.GOOS`.
 - `internal/heuristic` — known-positive and known-negative GNU-isms cases.
 - `internal/keyring` — env fallback path, source-tracking, in-memory `Store` mock.
@@ -140,22 +171,55 @@ conjure "show date 7 days ago in YYYY-MM-DD"              # expect: date -v-7d
 - **`embed` for static assets** (templates, prompts) — never `os.ReadFile`
   at runtime for things shipped with the binary.
 
-## API conventions
+## Provider conventions
 
-When modifying the Anthropic call (in `internal/api`):
+Every backend implements `provider.Provider` (in `internal/provider/provider.go`):
 
-- **Endpoint**: `https://api.anthropic.com/v1/messages`
-- **Headers**: `x-api-key`, `anthropic-version: 2023-06-01`, `content-type: application/json`
-- **Default model**: `claude-haiku-4-5` (fastest current Anthropic model).
-- **System prompt**: always sent as `system: [{type: "text", text: ...,
-  cache_control: {type: "ephemeral"}}]`. Caching is currently a no-op on
-  Haiku (prompt is below the 2048-token threshold), but the structure is in
-  place — don't remove it.
-- **Structured output**: use Tool Use (`tools` + forced `tool_choice`), never
-  `response_format` JSON-Schema. Tool Use is ~5× faster.
-- **Transport**: `api.Client` exposes `HTTPClient *http.Client` so tests
-  inject a mocked `RoundTripper` via `&http.Client{Transport: mock}`. Do
-  not call `http.DefaultClient` directly inside the package.
+```go
+type Provider interface {
+    Name() string
+    GeneratePlain(ctx, system, task) (string, error)
+    GenerateExplain(ctx, system, task) (*EmitCommand, error)
+}
+```
+
+The factory (`internal/provider/factory`) is the only place that knows about
+all backends; everywhere else depends on the interface.
+
+**`anthropic`** — `https://api.anthropic.com/v1/messages`. Headers `x-api-key`,
+`anthropic-version: 2023-06-01`. System prompt is sent as
+`system: [{type:"text", text:..., cache_control:{type:"ephemeral"}}]`.
+Structured output uses Tool Use (`tools` + forced `tool_choice`), never
+`response_format` — Tool Use is ~5× faster on Haiku. Default model
+`claude-haiku-4-5`. Keyring service `anthropic-api-key`, env fallback
+`ANTHROPIC_API_KEY`.
+
+**`openai`** — `https://api.openai.com/v1/chat/completions`. Header
+`Authorization: Bearer <key>`. Structured output uses
+`tools: [{type:"function",...}]` + `tool_choice: {type:"function",...}`.
+Default model `gpt-4o-mini`. Keyring service `openai-api-key`, env
+fallback `OPENAI_API_KEY`. Override base URL via `config.openai_base_url`.
+
+**`ollama`** — `$OLLAMA_HOST/api/chat` (default `http://localhost:11434`).
+Body uses OpenAI-style `tools`. Note that tool-call `arguments` arrive as a
+JSON object (not a stringified one, unlike OpenAI). No default model — must
+be set in config or via `--model`.
+
+**`codex`** — wraps the `openai` client but reads the API key from
+`~/.codex/auth.json` (override with `CONJURE_CODEX_AUTH_FILE` for tests).
+Reports `Name() == "codex"` so logs disambiguate. Out-of-scope for the
+speed budget — same latency as `openai` though.
+
+**`claude-cli`** — shells out to `claude -p --output-format text
+--allowedTools "" --append-system-prompt <sys>`. Mockable via the
+`execCommand` package var. Explain mode uses a "<command>\n# <expl>"
+two-line convention parsed back. ~3.7s per call from plugin/MCP boot;
+explicitly out-of-scope for the speed budget.
+
+**Transport in tests**: HTTP-based clients (`anthropic`, `openai`, `ollama`)
+expose an `Endpoint` field tests point at `httptest.Server`. The
+`claudecli` package exposes `var execCommand = exec.CommandContext` so
+tests can inject a fake binary.
 
 When adding a new flag:
 
@@ -194,7 +258,7 @@ When adding a new flag:
 
 The backlog lives in [GitHub Issues](https://github.com/alegerber/conjure/issues).
 
-Status as of 0.2.0:
+Status as of 0.3.0:
 
 - ✅ **#1** — bash `bind -x` widget for `cj`-equivalent (bash template ships
   the widget bound to `Ctrl-X Ctrl-J`).

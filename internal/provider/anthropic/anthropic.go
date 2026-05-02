@@ -1,4 +1,5 @@
-package api
+// Package anthropic is the Anthropic Messages API backend.
+package anthropic
 
 import (
 	"bytes"
@@ -8,11 +9,18 @@ import (
 	"io"
 	"net/http"
 	"strings"
+
+	"github.com/alegerber/conjure/internal/provider"
 )
 
 const (
 	endpoint        = "https://api.anthropic.com/v1/messages"
 	anthropicAPIVer = "2023-06-01"
+
+	// KeyringService is the system-keyring service name for the Anthropic API key.
+	KeyringService = "anthropic-api-key"
+	// EnvVar is the env-var fallback for the Anthropic API key.
+	EnvVar = "ANTHROPIC_API_KEY"
 )
 
 type Client struct {
@@ -33,13 +41,15 @@ func New(apiKey, model string, maxTokens int) *Client {
 	}
 }
 
+func (c *Client) Name() string { return string(provider.KindAnthropic) }
+
 func (c *Client) GeneratePlain(ctx context.Context, systemPrompt, task string) (string, error) {
 	req := Request{
 		Model:     c.Model,
 		MaxTokens: c.MaxTokens,
 		System: []SystemBlock{{
-			Type: "text",
-			Text: systemPrompt,
+			Type:         "text",
+			Text:         systemPrompt,
 			CacheControl: &CacheControl{Type: "ephemeral"},
 		}},
 		Messages: []Message{{Role: "user", Content: "Task: " + task}},
@@ -97,13 +107,13 @@ const emitCommandSchema = `{
   "required": ["command","explanation"]
 }`
 
-func (c *Client) GenerateExplain(ctx context.Context, systemPrompt, task string) (*EmitCommandInput, error) {
+func (c *Client) GenerateExplain(ctx context.Context, systemPrompt, task string) (*provider.EmitCommand, error) {
 	req := Request{
 		Model:     c.Model,
 		MaxTokens: c.MaxTokens,
 		System: []SystemBlock{{
-			Type: "text",
-			Text: systemPrompt,
+			Type:         "text",
+			Text:         systemPrompt,
 			CacheControl: &CacheControl{Type: "ephemeral"},
 		}},
 		Messages: []Message{{Role: "user", Content: "Task: " + task}},
@@ -120,7 +130,7 @@ func (c *Client) GenerateExplain(ctx context.Context, systemPrompt, task string)
 	}
 	for _, block := range resp.Content {
 		if block.Type == "tool_use" && block.Name == "emit_command" {
-			var out EmitCommandInput
+			var out provider.EmitCommand
 			if err := json.Unmarshal(block.Input, &out); err != nil {
 				return nil, fmt.Errorf("decode tool_use input: %w", err)
 			}

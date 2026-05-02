@@ -5,12 +5,17 @@ import (
 	"os"
 )
 
-type envStore struct{}
+type envStore struct{ envVar string }
 
-func NewEnvStore() Store { return envStore{} }
+// NewEnvStore returns an env-var store bound to the legacy ANTHROPIC_API_KEY
+// variable. Prefer NewEnvStoreFor for new code.
+func NewEnvStore() Store { return NewEnvStoreFor(EnvVar) }
 
-func (envStore) Get() (string, error) {
-	v := os.Getenv(EnvVar)
+// NewEnvStoreFor returns an env-var store bound to the given variable name.
+func NewEnvStoreFor(envVar string) Store { return envStore{envVar: envVar} }
+
+func (s envStore) Get() (string, error) {
+	v := os.Getenv(s.envVar)
 	if v == "" {
 		return "", ErrNotFound
 	}
@@ -21,4 +26,4 @@ func (envStore) Set(string) error {
 	return errors.New("env-var store is read-only; use system keyring (run: conjure setup)")
 }
 
-func (envStore) Source() string { return EnvVar + " env var" }
+func (s envStore) Source() string { return s.envVar + " env var" }
