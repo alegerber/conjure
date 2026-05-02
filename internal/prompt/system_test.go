@@ -43,7 +43,7 @@ func TestBuildSystem_OtherIsPOSIXFallback(t *testing.T) {
 }
 
 func TestBuildSystem_CaseInsensitive(t *testing.T) {
-	// CONJURE_OS env var may carry mixed-case values like "Darwin".
+	// The `os` config field may carry mixed-case values like "Darwin".
 	if got := BuildSystem("Darwin"); !strings.Contains(got, "BSD") {
 		t.Errorf(`BuildSystem("Darwin") should route to darwin branch; got: %q`, got)
 	}

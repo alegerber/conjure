@@ -39,8 +39,12 @@ func TestSaveLoad_RoundTrip(t *testing.T) {
 	want := &Config{
 		Provider:      "openai",
 		Model:         "gpt-4o-mini",
+		MaxTokens:     512,
+		OS:            "Darwin",
+		Explain:       true,
 		OllamaHost:    "http://localhost:11434",
 		OpenAIBaseURL: "https://example.com",
+		CodexAuthFile: "/tmp/codex-auth.json",
 	}
 	if err := Save(want); err != nil {
 		t.Fatalf("Save: %v", err)

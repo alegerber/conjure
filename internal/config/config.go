@@ -16,8 +16,12 @@ import (
 type Config struct {
 	Provider      string `json:"provider,omitempty"`
 	Model         string `json:"model,omitempty"`
+	MaxTokens     int    `json:"max_tokens,omitempty"`
+	OS            string `json:"os,omitempty"`
+	Explain       bool   `json:"explain,omitempty"`
 	OllamaHost    string `json:"ollama_host,omitempty"`
 	OpenAIBaseURL string `json:"openai_base_url,omitempty"`
+	CodexAuthFile string `json:"codex_auth_file,omitempty"`
 }
 
 // Path returns the absolute path to the config file. It honours

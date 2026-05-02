@@ -68,13 +68,17 @@ func TestNew_ReportsCodexName(t *testing.T) {
 	}
 }
 
-func TestDefaultAuthFile_HonoursEnvVar(t *testing.T) {
-	t.Setenv(AuthFileEnvVar, "/tmp/test-codex.json")
+func TestDefaultAuthFile_UsesHome(t *testing.T) {
 	got, err := DefaultAuthFile()
 	if err != nil {
 		t.Fatalf("DefaultAuthFile: %v", err)
 	}
-	if got != "/tmp/test-codex.json" {
-		t.Errorf("got %q", got)
+	home, err := os.UserHomeDir()
+	if err != nil {
+		t.Fatalf("UserHomeDir: %v", err)
+	}
+	want := filepath.Join(home, ".codex", "auth.json")
+	if got != want {
+		t.Errorf("got %q, want %q", got, want)
 	}
 }

@@ -75,7 +75,7 @@ mode 0600.
 |--------------|----------------------------------------------------|------------------------------------------------------------|
 | `anthropic`  | `https://api.anthropic.com/v1/messages`            | API key in keyring (`anthropic-api-key` / `ANTHROPIC_API_KEY`) |
 | `openai`     | `https://api.openai.com/v1/chat/completions`       | API key in keyring (`openai-api-key` / `OPENAI_API_KEY`)   |
-| `ollama`     | `$OLLAMA_HOST/api/chat` (default `localhost:11434`)| None — runs against your local Ollama                      |
+| `ollama`     | `<ollama_host>/api/chat` (default `localhost:11434`)| None — runs against your local Ollama                      |
 | `codex`      | OpenAI API, key from `~/.codex/auth.json`          | Reuses Codex CLI credentials (`codex login` first)         |
 | `claude-cli` | Shells out to `claude -p`                          | Reuses Claude Code session (install + log into `claude`)   |
 
@@ -83,7 +83,7 @@ Override the configured provider per-call:
 
 ```sh
 conjure --provider openai "list md files"
-CONJURE_PROVIDER=ollama conjure --model llama3.1 "show top 3 dirs"
+conjure --provider ollama --model llama3.1 "show top 3 dirs"
 ```
 
 Subscription modes are slower than the pay-per-token APIs:
@@ -96,7 +96,7 @@ Subscription modes are slower than the pay-per-token APIs:
 ```sh
 conjure "<description>"          # plain command, ~0.85s
 conjure -e "<description>"       # command + brief explanation, ~1.3s
-conjure --no-explain "..."       # force plain output (overrides CONJURE_EXPLAIN)
+conjure --no-explain "..."       # force plain output (overrides config explain=true)
 cj "<description>"               # zsh-only: pushes command into the editor buffer
 ```
 
@@ -111,7 +111,8 @@ API for structured output, returning two lines:
 ```
 
 This costs roughly +400ms and ~+50 tokens compared to plain mode. To enable
-by default, set `CONJURE_EXPLAIN=1`; override per-call with `--no-explain`.
+by default, set `"explain": true` in the config file; override per-call with
+`--no-explain`.
 
 In the zsh `cj` function, the command goes into the editor buffer (via
 `print -z`) and the explanation is printed above the next prompt — so you
@@ -129,25 +130,44 @@ The system prompt is tagged `cache_control: ephemeral` for Anthropic prompt
 caching, but the prompt is currently ~350 tokens — below Haiku's 2048-token
 cache threshold, so caching is effectively a no-op on the default model.
 It starts working free-of-charge if you switch to Sonnet (1024-token
-threshold) via `CONJURE_MODEL=claude-sonnet-4-6`.
+threshold) by setting `"model": "claude-sonnet-4-6"` in the config file.
+
+### Configuration file
+
+Persistent settings live in `~/.config/conjure/config.json` (or the OS
+equivalent via `os.UserConfigDir`). `conjure setup` writes most fields for
+you; the rest are hand-edited.
+
+| Field | Default | Purpose |
+|---|---|---|
+| `provider` | — | One of `anthropic`, `openai`, `ollama`, `codex`, `claude-cli` |
+| `model` | per-provider default | Model id (e.g. `claude-sonnet-4-6`, `gpt-4o`, `llama3.1`) |
+| `max_tokens` | `256` | Max output tokens (anthropic/openai/codex) |
+| `os` | auto-detected | OS hint shown to the model (`Darwin` / `Linux`) |
+| `explain` | `false` | Set to `true` to default to `--explain` |
+| `ollama_host` | `http://localhost:11434` | Ollama base URL |
+| `openai_base_url` | OpenAI default | Override OpenAI-compatible endpoint |
+| `codex_auth_file` | `~/.codex/auth.json` | Path to the Codex CLI auth file |
+
+Example:
+
+```json
+{
+  "provider": "anthropic",
+  "model": "claude-sonnet-4-6",
+  "explain": true
+}
+```
 
 ### Environment overrides
 
-| Variable | Default | Purpose |
-|---|---|---|
-| `CONJURE_PROVIDER` | from config | One of `anthropic`, `openai`, `ollama`, `codex`, `claude-cli` |
-| `CONJURE_MODEL` | per-provider default | Model id (e.g. `claude-sonnet-4-6`, `gpt-4o`, `llama3.1`) |
-| `CONJURE_MAX_TOKENS` | `256` | Max output tokens (anthropic/openai/codex) |
-| `CONJURE_OS` | auto-detected | OS hint shown to the model (`Darwin` / `Linux`) |
-| `CONJURE_EXPLAIN` | `0` | Set to `1` to default to `--explain` |
-| `OLLAMA_HOST` | `http://localhost:11434` | Ollama base URL (matches Ollama's own env var) |
-| `CONJURE_CODEX_AUTH_FILE` | `~/.codex/auth.json` | Override path to the Codex auth file (mostly for tests) |
-| `ANTHROPIC_API_KEY` | — | Fallback Anthropic key when keyring is empty |
-| `OPENAI_API_KEY` | — | Fallback OpenAI key when keyring is empty |
+API keys are the only values still read from the environment; everything
+else lives in the config file above.
 
-```sh
-CONJURE_MODEL=claude-sonnet-4-6 conjure "complicated multi-step pipeline"
-```
+| Variable | Purpose |
+|---|---|
+| `ANTHROPIC_API_KEY` | Fallback Anthropic key when keyring is empty |
+| `OPENAI_API_KEY` | Fallback OpenAI key when keyring is empty |
 
 ### Piping the result
 

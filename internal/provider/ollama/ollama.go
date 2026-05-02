@@ -13,10 +13,7 @@ import (
 	"github.com/alegerber/conjure/internal/provider"
 )
 
-const (
-	DefaultHost = "http://localhost:11434"
-	HostEnvVar  = "OLLAMA_HOST"
-)
+const DefaultHost = "http://localhost:11434"
 
 type Client struct {
 	Host       string

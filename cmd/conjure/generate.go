@@ -31,44 +31,13 @@ type generateOpts struct {
 	model    string
 }
 
-const ProviderEnvVar = "CONJURE_PROVIDER"
+const defaultMaxTokens = 256
 
-func defaultMaxTokens() int {
-	if v := os.Getenv("CONJURE_MAX_TOKENS"); v != "" {
-		var n int
-		if _, err := fmt.Sscanf(v, "%d", &n); err != nil || n <= 0 {
-			fmt.Fprintf(os.Stderr, "conjure: ignoring invalid CONJURE_MAX_TOKENS=%q (want positive integer)\n", v)
-		} else {
-			return n
-		}
-	}
-	return 256
-}
-
-func defaultOS() string {
-	if v := os.Getenv("CONJURE_OS"); v != "" {
-		return v
-	}
-	return runtime.GOOS
-}
-
-func envExplain() bool {
-	return os.Getenv("CONJURE_EXPLAIN") == "1"
-}
-
-// resolveProvider builds a Provider from flags + env + on-disk config. Order
-// of precedence: --provider / --model flags > env vars > config file >
-// per-kind defaults.
-func resolveProvider(opts generateOpts) (provider.Provider, error) {
-	cfg, err := config.Load()
-	if err != nil {
-		return nil, err
-	}
-
+// resolveProvider builds a Provider from flags + on-disk config. Order
+// of precedence: --provider / --model flags > config file > per-kind
+// defaults.
+func resolveProvider(cfg *config.Config, opts generateOpts) (provider.Provider, error) {
 	kindStr := opts.provider
-	if kindStr == "" {
-		kindStr = os.Getenv(ProviderEnvVar)
-	}
 	if kindStr == "" {
 		kindStr = cfg.Provider
 	}
@@ -88,19 +57,21 @@ func resolveProvider(opts generateOpts) (provider.Provider, error) {
 
 	model := opts.model
 	if model == "" {
-		model = os.Getenv("CONJURE_MODEL")
-	}
-	if model == "" {
 		model = cfg.Model
 	}
 	if model == "" {
 		model = provider.DefaultModel(kind)
 	}
 
+	maxTokens := cfg.MaxTokens
+	if maxTokens <= 0 {
+		maxTokens = defaultMaxTokens
+	}
+
 	spec := provider.Spec{
 		Kind:      kind,
 		Model:     model,
-		MaxTokens: defaultMaxTokens(),
+		MaxTokens: maxTokens,
 	}
 
 	var key string
@@ -119,16 +90,12 @@ func resolveProvider(opts generateOpts) (provider.Provider, error) {
 		key = k
 		spec.BaseURL = cfg.OpenAIBaseURL
 	case provider.KindOllama:
-		host := cfg.OllamaHost
-		if v := os.Getenv("OLLAMA_HOST"); v != "" {
-			host = v
-		}
-		spec.BaseURL = host
+		spec.BaseURL = cfg.OllamaHost
 		if spec.Model == "" {
 			return nil, fmt.Errorf("ollama: no model configured. Set with --model or `conjure setup`")
 		}
 	case provider.KindCodex:
-		// codex.New() reads the auth file itself.
+		spec.AuthFile = cfg.CodexAuthFile
 	case provider.KindClaudeCLI:
 		// no credentials needed
 	}
@@ -136,11 +103,14 @@ func resolveProvider(opts generateOpts) (provider.Provider, error) {
 	return factory.New(spec, key)
 }
 
-func runGenerate(opts generateOpts, description string) error {
-	osHint := defaultOS()
+func runGenerate(cfg *config.Config, opts generateOpts, description string) error {
+	osHint := cfg.OS
+	if osHint == "" {
+		osHint = runtime.GOOS
+	}
 	systemPrompt := prompt.BuildSystem(osHint)
 
-	prov, err := resolveProvider(opts)
+	prov, err := resolveProvider(cfg, opts)
 	if err != nil {
 		return err
 	}
@@ -192,19 +162,19 @@ func runGenerate(opts generateOpts, description string) error {
 	return nil
 }
 
-func resolveExplain(flagExplain, flagNoExplain bool) bool {
+func resolveExplain(flagExplain, flagNoExplain, cfgExplain bool) bool {
 	if flagNoExplain {
 		return false
 	}
 	if flagExplain {
 		return true
 	}
-	return envExplain()
+	return cfgExplain
 }
 
 func attachGenerateFlags(cmd *cobra.Command, opts *generateOpts) {
 	cmd.Flags().BoolVarP(&opts.explain, "explain", "e", false, "Generate command + brief explanation (uses tool-use)")
-	cmd.Flags().BoolVar(&opts.noEx, "no-explain", false, "Force plain output (overrides CONJURE_EXPLAIN)")
+	cmd.Flags().BoolVar(&opts.noEx, "no-explain", false, "Force plain output (overrides config explain=true)")
 	cmd.Flags().BoolVar(&opts.copy, "copy", false, "Copy generated command to system clipboard")
 	cmd.Flags().BoolVar(&opts.run, "run", false, "After printing, prompt to execute the command")
 	cmd.Flags().StringVar(&opts.provider, "provider", "", "Override configured provider (anthropic|openai|ollama|codex|claude-cli)")
@@ -218,7 +188,11 @@ func rootRunE(opts *generateOpts) func(cmd *cobra.Command, args []string) error 
 		if len(args) == 0 {
 			return cmd.Help()
 		}
-		opts.explain = resolveExplain(opts.explain, opts.noEx)
-		return runGenerate(*opts, strings.Join(args, " "))
+		cfg, err := config.Load()
+		if err != nil {
+			return err
+		}
+		opts.explain = resolveExplain(opts.explain, opts.noEx, cfg.Explain)
+		return runGenerate(cfg, *opts, strings.Join(args, " "))
 	}
 }
