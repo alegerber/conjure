@@ -205,7 +205,7 @@ func (c *Client) do(ctx context.Context, body chatRequest) (*chatResponse, error
 	if err != nil {
 		return nil, fmt.Errorf("API call failed: %w", err)
 	}
-	defer httpResp.Body.Close()
+	defer func() { _ = httpResp.Body.Close() }()
 
 	respBytes, err := io.ReadAll(httpResp.Body)
 	if err != nil {
