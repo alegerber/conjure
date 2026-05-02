@@ -14,8 +14,10 @@ $ cj "show top 3 largest directories"
 # (zsh-only) command lands editable in the next prompt, ready to edit or run
 ```
 
-A small bash CLI that calls the Anthropic Messages API directly — no Claude
-Code, no MCP, no plugin discovery. Just `curl` and `jq`.
+A small CLI that turns natural-language descriptions into single-line Unix
+commands. As of 0.3.0 it supports five backends — three pay-per-token APIs,
+one local model, and two subscription-mode adapters that reuse credentials
+from the official Codex and Claude CLIs.
 
 ## Why?
 
@@ -58,12 +60,36 @@ Make sure `~/.local/bin` is on your `$PATH`. If you use the zsh plugin, add
 ## First-time setup
 
 ```sh
-conjure --setup
+conjure setup
 ```
 
-This prompts for your API key (input hidden) and stores it in the macOS
-Keychain under service `anthropic-api-key`. The key is read on demand and
-never written to disk in plain text.
+This walks you through picking a provider and stashing whatever credentials
+that provider needs. API keys go into the OS keyring (Keychain on macOS,
+Secret Service on Linux, Credential Manager on Windows); preferences are
+written to `~/.config/conjure/config.json` (or the OS equivalent) with
+mode 0600.
+
+## Providers
+
+| Key          | Backend                                            | Auth                                                       |
+|--------------|----------------------------------------------------|------------------------------------------------------------|
+| `anthropic`  | `https://api.anthropic.com/v1/messages`            | API key in keyring (`anthropic-api-key` / `ANTHROPIC_API_KEY`) |
+| `openai`     | `https://api.openai.com/v1/chat/completions`       | API key in keyring (`openai-api-key` / `OPENAI_API_KEY`)   |
+| `ollama`     | `$OLLAMA_HOST/api/chat` (default `localhost:11434`)| None — runs against your local Ollama                      |
+| `codex`      | OpenAI API, key from `~/.codex/auth.json`          | Reuses Codex CLI credentials (`codex login` first)         |
+| `claude-cli` | Shells out to `claude -p`                          | Reuses Claude Code session (install + log into `claude`)   |
+
+Override the configured provider per-call:
+
+```sh
+conjure --provider openai "list md files"
+CONJURE_PROVIDER=ollama conjure --model llama3.1 "show top 3 dirs"
+```
+
+Subscription modes are slower than the pay-per-token APIs:
+
+- `claude-cli` adds ~3.7s per call for plugin/MCP boot.
+- `codex` is just OpenAI under the hood, so latency matches `openai`.
 
 ## Usage
 
@@ -109,10 +135,15 @@ threshold) via `CONJURE_MODEL=claude-sonnet-4-6`.
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `CONJURE_MODEL` | `claude-haiku-4-5` | Anthropic model id (e.g. `claude-sonnet-4-6`) |
-| `CONJURE_MAX_TOKENS` | `256` | Max output tokens |
+| `CONJURE_PROVIDER` | from config | One of `anthropic`, `openai`, `ollama`, `codex`, `claude-cli` |
+| `CONJURE_MODEL` | per-provider default | Model id (e.g. `claude-sonnet-4-6`, `gpt-4o`, `llama3.1`) |
+| `CONJURE_MAX_TOKENS` | `256` | Max output tokens (anthropic/openai/codex) |
 | `CONJURE_OS` | auto-detected | OS hint shown to the model (`Darwin` / `Linux`) |
 | `CONJURE_EXPLAIN` | `0` | Set to `1` to default to `--explain` |
+| `OLLAMA_HOST` | `http://localhost:11434` | Ollama base URL (matches Ollama's own env var) |
+| `CONJURE_CODEX_AUTH_FILE` | `~/.codex/auth.json` | Override path to the Codex auth file (mostly for tests) |
+| `ANTHROPIC_API_KEY` | — | Fallback Anthropic key when keyring is empty |
+| `OPENAI_API_KEY` | — | Fallback OpenAI key when keyring is empty |
 
 ```sh
 CONJURE_MODEL=claude-sonnet-4-6 conjure "complicated multi-step pipeline"

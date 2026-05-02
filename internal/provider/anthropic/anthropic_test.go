@@ -1,4 +1,4 @@
-package api
+package anthropic
 
 import (
 	"context"
@@ -38,8 +38,6 @@ func TestGeneratePlain_StripsFencesAndReturnsCommand(t *testing.T) {
 			t.Errorf("max_tokens = %d, want 256", req.MaxTokens)
 		}
 		w.Header().Set("content-type", "application/json")
-		// Return a fenced code block so that stripFences is exercised.
-		// Wire JSON: {"content":[{"type":"text","text":"```\nfind . -name '*.md'\n```\n"}]}
 		body := fmt.Sprintf(
 			`{"content":[{"type":"text","text":"%s\nfind . -name '*.md'\n%s\n"}]}`,
 			"```", "```",
