@@ -19,3 +19,7 @@
 *.test
 *.out
 coverage.txt
+
+docs/superpowers
+
+.claude
