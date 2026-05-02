@@ -19,5 +19,6 @@ Unix command by calling the Anthropic Messages API directly.`,
 	}
 	attachGenerateFlags(cmd, &opts)
 	cmd.AddCommand(newSetupCmd())
+	cmd.AddCommand(newShellInitCmd())
 	return cmd
 }
