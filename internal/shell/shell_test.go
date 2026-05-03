@@ -25,6 +25,26 @@ func TestRender_BashContainsBindWidget(t *testing.T) {
 	}
 }
 
+func TestRender_FishContainsCommandlineWidget(t *testing.T) {
+	got, err := Render("fish")
+	if err != nil {
+		t.Fatalf("Render: %v", err)
+	}
+	if !strings.Contains(got, "function cj") || !strings.Contains(got, "commandline -r") {
+		t.Errorf("fish output missing function cj or commandline -r; got:\n%s", got)
+	}
+}
+
+func TestRender_PowerShellContainsPSReadLineInsert(t *testing.T) {
+	got, err := Render("powershell")
+	if err != nil {
+		t.Fatalf("Render: %v", err)
+	}
+	if !strings.Contains(got, "function cj") || !strings.Contains(got, "PSConsoleReadLine") {
+		t.Errorf("powershell output missing function cj or PSConsoleReadLine; got:\n%s", got)
+	}
+}
+
 func TestRender_UnknownShellErrors(t *testing.T) {
 	if _, err := Render("tcsh"); err == nil {
 		t.Errorf("Render(tcsh) should error")

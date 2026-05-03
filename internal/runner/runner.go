@@ -14,7 +14,11 @@ import (
 var ErrAborted = errors.New("aborted by user")
 
 // ConfirmAndRun prints cmd, reads y/N from in, and on confirmation runs
-// the command via the platform's default shell. stdout/stderr go to out.
+// the command via the platform's default shell. The executed command's
+// stdout is wired to out; its stderr always goes to os.Stderr. If a caller
+// passes os.Stderr as out, writes from the two streams may interleave at
+// arbitrary byte boundaries because the Go runtime does not synchronise
+// independent file handles to the same underlying descriptor.
 // On Windows it shells out via "cmd /C"; elsewhere via "sh -c".
 func ConfirmAndRun(cmd string, in io.Reader, out io.Writer) error {
 	_, _ = fmt.Fprintf(out, "Run this command? [y/N]\n  %s\n> ", cmd)
