@@ -6,7 +6,7 @@
 ## Project
 
 **conjure** is a small, fast CLI that turns natural-language descriptions
-into single-line Unix commands. As of 0.3.0 it speaks to five backends
+into single-line Unix commands. As of 1.0.0 it speaks to five backends
 (Anthropic / OpenAI / Ollama / Codex CLI credentials / Claude CLI) behind a
 common `provider.Provider` interface, and ships as a single static Go binary
 — no `curl`, `jq`, or shell-runtime dependencies on the user side.
@@ -259,15 +259,15 @@ When adding a new flag:
 
 The backlog lives in [GitHub Issues](https://github.com/alegerber/conjure/issues).
 
-Status as of 0.3.0:
+Status as of 1.0.0:
 
 - ✅ **#1** — bash `bind -x` widget for `cj`-equivalent (bash template ships
   the widget bound to `Ctrl-X Ctrl-J`).
 - ✅ **#2** — `--copy` flag for clipboard.
 - ✅ **#3** — `--run` flag with confirm prompt.
-- ⏳ **#4** — Brew/Scoop distribution via goreleaser (configuration deferred
-  until Brew tap + Scoop bucket repos exist; install today via `go install` or
-  release-binary `install.sh`).
+- ✅ **#4** — Brew distribution via goreleaser (released in 1.0.0:
+  `.goreleaser.yml`, `.github/workflows/release.yml`, tap repo
+  `alegerber/homebrew-conjure`). Scoop bucket still pending.
 
 When you finish an item, close the issue with `Closes #N` in the commit body.
 

@@ -7,7 +7,7 @@ import (
 
 // Version is overridden at release time via -ldflags "-X main.Version=...".
 // Must remain a var, since constants cannot be linker-injected.
-var Version = "0.3.0-dev"
+var Version = "1.0.0"
 
 func main() {
 	root := newRootCmd()

@@ -4,7 +4,10 @@
 
 | Version | Supported          |
 |---------|--------------------|
-| 0.1.x   | :white_check_mark: |
+| 1.x     | :white_check_mark: |
+| 0.3.x   | :white_check_mark: (security fixes only) |
+| 0.2.x   | :x:                |
+| 0.1.x   | :x:                |
 
 ## Reporting a Vulnerability
 
@@ -38,17 +41,28 @@ relevant security surface is therefore *not* the network library — it is
 the boundary between **untrusted model output** and **your shell**, plus
 the handling of your **API credentials**.
 
-- **API key storage.** `conjure --setup` stores the key in the macOS
-  Keychain under service `anthropic-api-key` (account = `$USER`). The key
-  is read on demand via `security find-generic-password` and never written
-  to disk in plain text by conjure itself. Treat the Keychain entry like
-  any other long-lived secret: lock your screen, enable FileVault, do not
-  share the user account.
-- **`ANTHROPIC_API_KEY` env-var fallback.** If set, the env var takes
-  precedence over the Keychain entry. This is convenient for CI but exposes
-  the key to every child process and to `ps`/`/proc/<pid>/environ` on
-  shared hosts. Prefer the Keychain on workstations; on CI, scope the
-  variable to a single job and never echo it.
+- **API key storage.** `conjure setup` stores the key in the OS-native
+  credential store under a per-provider service name (e.g.
+  `anthropic-api-key`, `openai-api-key`) with `account = $USER`:
+  - **macOS:** Keychain, accessed via `security find-generic-password`.
+    Hardening: lock your screen, enable FileVault, do not share the user
+    account.
+  - **Linux:** Secret Service (libsecret) over D-Bus — typically
+    GNOME Keyring or KWallet. Requires an unlocked session keyring;
+    headless servers without a Secret Service provider should use the
+    env-var fallback below.
+  - **Windows:** Credential Manager (Generic Credentials), accessed via
+    `wincred`. Visible in `Control Panel → User Accounts → Credential
+    Manager → Windows Credentials`.
+  In all cases the key is read on demand and never written to disk in
+  plain text by conjure itself.
+- **Env-var fallback.** Per-provider env vars (`ANTHROPIC_API_KEY`,
+  `OPENAI_API_KEY`) take precedence over the keyring entry when set.
+  This is convenient for CI and for headless Linux hosts that lack a
+  Secret Service provider, but it exposes the key to every child process
+  and to `ps` / `/proc/<pid>/environ` on shared hosts. Prefer the
+  OS keyring on workstations; on CI, scope the variable to a single job
+  and never echo it.
 - **Executing generated commands is the user's responsibility.** Output is
   plain text by design so you can read it before running. **Never pipe
   conjure output into `eval`, `sh -c`, or `bash -c` without reviewing it
@@ -77,10 +91,13 @@ the handling of your **API credentials**.
   through on macOS. It is a UX guard, not a sandbox: it does not block
   execution, does not enumerate dangerous commands, and is trivially
   bypassed by paraphrased output.
-- **Uninstall does not remove the Keychain entry.** `./install.sh
-  --uninstall` only removes the symlinks. If you are wiping a machine,
-  hand it off, or rotating keys, delete the credential explicitly:
-  `security delete-generic-password -a "$USER" -s "anthropic-api-key"`.
+- **Uninstall does not remove the credential.** `./install.sh --uninstall`
+  (or `brew uninstall conjure`) only removes the binary. If you are wiping
+  a machine, handing it off, or rotating keys, delete the credential
+  explicitly:
+  - macOS: `security delete-generic-password -a "$USER" -s "anthropic-api-key"`
+  - Linux: `secret-tool clear service anthropic-api-key`
+  - Windows: `cmdkey /delete:anthropic-api-key`
 
 ### Threat Model
 

@@ -31,29 +31,51 @@ output quality on macOS (BSD coreutils).
 
 ## Requirements
 
-- Go 1.25+ (`brew install go`) to build from source
-- macOS, Linux, or Windows — credentials use the OS keyring
-  (Keychain / Secret Service / Credential Manager)
+- macOS, Linux, or Windows — credentials live in the OS keyring
+  (Keychain on macOS, Secret Service / libsecret on Linux,
+  Credential Manager on Windows). Linux desktops without a Secret
+  Service provider can fall back to the `ANTHROPIC_API_KEY` /
+  `OPENAI_API_KEY` env vars.
 - An API key for one of the supported providers (or a local Ollama / a
-  signed-in `codex` / `claude` CLI)
+  signed-in `codex` / `claude` CLI).
+- Go 1.25+ (`brew install go`) only required when building from source.
 
 ## Install
 
+### Homebrew (macOS / Linux)
+
 ```sh
-git clone https://github.com/alegerber/conjure ~/github/conjure
-cd ~/github/conjure
-./install.sh
+brew tap alegerber/conjure
+brew install conjure
 ```
 
-The installer runs `go install ./cmd/conjure` (binary lands in
-`${GOBIN:-$GOPATH/bin}`, typically `~/go/bin/conjure`) and symlinks it into
-`~/.local/bin/conjure` so the binary stays on `$PATH` at a stable location.
-Override the symlink dir with `BIN_DIR=`. Future `go install ./cmd/conjure`
-runs keep both paths in sync — no need to re-run the installer for upgrades.
+### Install script (macOS / Linux / WSL)
 
-Make sure `~/.local/bin` is on your `$PATH`. For the `cj()` shell helper
-(drops the generated command into your input buffer instead of printing it),
-append this to your shell rc:
+```sh
+curl -sSL https://raw.githubusercontent.com/alegerber/conjure/main/install.sh | bash
+```
+
+Downloads the matching release archive from GitHub and drops the binary
+into `~/.local/bin/conjure`. Override with `BIN_DIR=~/bin` and pin a
+specific version with `VERSION=v1.0.0`.
+
+### Manual download
+
+Grab a prebuilt archive for your OS/arch from the
+[releases page](https://github.com/alegerber/conjure/releases) and place
+the `conjure` binary somewhere on your `$PATH`.
+
+### From source
+
+```sh
+git clone https://github.com/alegerber/conjure
+cd conjure
+go install ./cmd/conjure
+```
+
+Make sure `~/.local/bin` (or `${GOBIN:-$GOPATH/bin}`) is on your `$PATH`.
+For the `cj()` shell helper (drops the generated command into your input
+buffer instead of printing it), append this to your shell rc:
 
 ```sh
 eval "$(conjure shell-init zsh)"     # or: bash | fish | powershell
@@ -82,6 +104,18 @@ conjure --no-explain "..."       # force plain output (overrides config explain=
 cj "<description>"               # pushes command into the shell input buffer (see Install)
 ```
 
+### Flags
+
+| Flag             | Default | Description                                                                          |
+|------------------|---------|--------------------------------------------------------------------------------------|
+| `-e`, `--explain`| `false` | Generate command + brief explanation (uses tool-use; ~1.3s).                         |
+| `--no-explain`   | `false` | Force plain output (overrides `explain=true` from config).                           |
+| `--copy`         | `false` | Copy the generated command to the system clipboard.                                  |
+| `--run`          | `false` | After printing, prompt to execute the command.                                       |
+| `--provider`     | config  | Override configured provider (`anthropic`, `openai`, `ollama`, `codex`, `claude-cli`). |
+| `--model`        | config  | Override configured model name.                                                      |
+| `--ollama-host`  | config  | Override Ollama host URL (precedence: flag > `$OLLAMA_HOST` > config).               |
+
 ### Piping the result
 
 ```sh
@@ -100,16 +134,20 @@ Each call uses ~200 input + ~80 output tokens with Haiku 4.5 → about
 ## Uninstall
 
 ```sh
-cd ~/github/conjure && ./install.sh --uninstall
+brew uninstall conjure                         # if installed via Homebrew
+./install.sh --uninstall                       # if installed via install.sh
+go clean -i github.com/alegerber/conjure/...   # if installed from source
 ```
 
-This removes the `~/.local/bin/conjure` symlink. The binary in
-`${GOBIN:-$GOPATH/bin}` and your API key in the keyring are kept by default;
-remove them with:
+API keys stored in the OS keyring are kept by default. Remove them with:
 
 ```sh
-rm "$(go env GOBIN || go env GOPATH)/bin/conjure"        # or: ~/go/bin/conjure
+# macOS
 security delete-generic-password -a "$USER" -s "anthropic-api-key"
+# Linux (Secret Service)
+secret-tool clear service anthropic-api-key
+# Windows (PowerShell)
+cmdkey /delete:anthropic-api-key
 ```
 
 ## Name conflict
