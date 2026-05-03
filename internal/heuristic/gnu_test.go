@@ -41,3 +41,23 @@ func TestCheckGNU_LinuxReturnsNoWarnings(t *testing.T) {
 		t.Errorf("Linux should produce no warnings; got: %v", hits)
 	}
 }
+
+// Tokenisation eliminates the false positive where "sed -i" appears inside a
+// quoted string and is not actually being executed.
+func TestCheckGNU_QuotedSedDoesNotTrigger(t *testing.T) {
+	hits := CheckGNU(`echo "sed -i 'foo'"`, "darwin")
+	for _, h := range hits {
+		if strings.Contains(h, "sed -i") {
+			t.Errorf("quoted sed -i in echo should not warn; got: %q", h)
+		}
+	}
+}
+
+func TestCheckGNU_BSDDoubleQuotedEmptyBackupAccepted(t *testing.T) {
+	hits := CheckGNU(`sed -i "" 's/a/b/' file`, "darwin")
+	for _, h := range hits {
+		if strings.Contains(h, "sed -i") {
+			t.Errorf("BSD sed -i \"\" should not warn; got: %q", h)
+		}
+	}
+}

@@ -31,9 +31,32 @@ func CheckGNU(cmd, os string) []string {
 		hits = append(hits, "'readlink -f' is GNU-only; use 'realpath' or 'cd ... && pwd'")
 	}
 	// Catch GNU "sed -i 'PATTERN'" without the BSD-required empty backup arg.
-	// Known false positive: "sed -i '.bak' 'PATTERN'" (named backup) also matches.
-	if strings.Contains(cmd, "sed -i '") && !strings.Contains(cmd, "sed -i ''") {
+	// Tokenising on whitespace avoids the substring false positive on quoted
+	// strings like `echo "sed -i 'foo'"`. Remaining limitation: BSD's named-
+	// backup form `sed -i .bak 'PATTERN'` still triggers a warning, since
+	// distinguishing it from a GNU-style pattern requires real shell parsing.
+	if hasGNUSedIArg(cmd) {
 		hits = append(hits, "'sed -i' on macOS needs an empty backup arg: sed -i '' 'PATTERN'")
 	}
 	return hits
+}
+
+func hasGNUSedIArg(cmd string) bool {
+	fields := strings.Fields(cmd)
+	for i, f := range fields {
+		if f != "sed" {
+			continue
+		}
+		for j := i + 1; j+1 < len(fields); j++ {
+			if fields[j] != "-i" {
+				continue
+			}
+			next := fields[j+1]
+			if next != "''" && next != `""` {
+				return true
+			}
+			break
+		}
+	}
+	return false
 }
