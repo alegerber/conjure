@@ -2,6 +2,8 @@ package clipboard
 
 import (
 	"errors"
+	"fmt"
+	"os/exec"
 	"runtime"
 )
 
@@ -21,7 +23,13 @@ func New() (Copier, error) {
 		if waylandSession() {
 			return execCopier{cmd: "wl-copy"}, nil
 		}
-		return execCopier{cmd: "xclip", args: []string{"-selection", "clipboard"}}, nil
+		if _, err := exec.LookPath("xclip"); err == nil {
+			return execCopier{cmd: "xclip", args: []string{"-selection", "clipboard"}}, nil
+		}
+		if _, err := exec.LookPath("xsel"); err == nil {
+			return execCopier{cmd: "xsel", args: []string{"--clipboard", "--input"}}, nil
+		}
+		return nil, fmt.Errorf("%w: install xclip or xsel", ErrUnavailable)
 	case "windows":
 		return execCopier{cmd: "clip.exe"}, nil
 	default:
