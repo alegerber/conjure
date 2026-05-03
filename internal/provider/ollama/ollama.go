@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/alegerber/conjure/internal/provider"
+	"github.com/alegerber/conjure/internal/provider/textutil"
 )
 
 const DefaultHost = "http://localhost:11434"
@@ -107,7 +108,7 @@ func (c *Client) GeneratePlain(ctx context.Context, systemPrompt, task string) (
 	if resp.Message.Content == "" {
 		return "", fmt.Errorf("empty response")
 	}
-	return stripFences(resp.Message.Content), nil
+	return textutil.StripFences(resp.Message.Content), nil
 }
 
 func (c *Client) GenerateExplain(ctx context.Context, systemPrompt, task string) (*provider.EmitCommand, error) {
@@ -179,22 +180,3 @@ func (c *Client) do(ctx context.Context, body chatRequest) (*chatResponse, error
 	return &resp, nil
 }
 
-func stripFences(s string) string {
-	s = strings.TrimSpace(s)
-	lines := strings.Split(s, "\n")
-	if len(lines) > 0 && strings.HasPrefix(strings.TrimSpace(lines[0]), "```") {
-		lines = lines[1:]
-	}
-	if len(lines) > 0 && strings.TrimSpace(lines[len(lines)-1]) == "```" {
-		lines = lines[:len(lines)-1]
-	}
-	for _, line := range lines {
-		if t := strings.TrimSpace(line); t != "" {
-			if len(t) >= 2 && strings.HasPrefix(t, "`") && strings.HasSuffix(t, "`") {
-				return t[1 : len(t)-1]
-			}
-			return t
-		}
-	}
-	return ""
-}

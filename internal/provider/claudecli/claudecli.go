@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	"github.com/alegerber/conjure/internal/provider"
+	"github.com/alegerber/conjure/internal/provider/textutil"
 )
 
 // execCommand is exec.CommandContext, exposed for tests.
@@ -47,7 +48,7 @@ func (c *Client) GeneratePlain(ctx context.Context, systemPrompt, task string) (
 	if err := cmd.Run(); err != nil {
 		return "", fmt.Errorf("claude -p failed: %w (stderr: %s)", err, strings.TrimSpace(stderr.String()))
 	}
-	out := stripFences(stdout.String())
+	out := textutil.StripFences(stdout.String())
 	if out == "" {
 		return "", fmt.Errorf("empty response from claude -p")
 	}
@@ -109,26 +110,6 @@ func splitCommandAndExplanation(raw string) (string, string) {
 		}
 	}
 	return cmdLine, expl
-}
-
-func stripFences(s string) string {
-	s = strings.TrimSpace(s)
-	lines := strings.Split(s, "\n")
-	if len(lines) > 0 && strings.HasPrefix(strings.TrimSpace(lines[0]), "```") {
-		lines = lines[1:]
-	}
-	if len(lines) > 0 && strings.TrimSpace(lines[len(lines)-1]) == "```" {
-		lines = lines[:len(lines)-1]
-	}
-	for _, line := range lines {
-		if t := strings.TrimSpace(line); t != "" {
-			if len(t) >= 2 && strings.HasPrefix(t, "`") && strings.HasSuffix(t, "`") {
-				return t[1 : len(t)-1]
-			}
-			return t
-		}
-	}
-	return ""
 }
 
 // LookPath returns nil if `claude` is on PATH, an error otherwise. Used by

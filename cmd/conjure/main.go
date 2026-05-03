@@ -5,7 +5,9 @@ import (
 	"os"
 )
 
-const Version = "0.3.0-dev"
+// Version is overridden at release time via -ldflags "-X main.Version=...".
+// Must remain a var, since constants cannot be linker-injected.
+var Version = "0.3.0-dev"
 
 func main() {
 	root := newRootCmd()

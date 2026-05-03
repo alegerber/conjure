@@ -33,7 +33,7 @@ func TestGeneratePlain_SendsExpectedRequestAndStripsFences(t *testing.T) {
 	defer srv.Close()
 
 	c := New("sk-test", "gpt-4o-mini", 256)
-	c.Endpoint = srv.URL
+	c.endpoint = srv.URL
 	got, err := c.GeneratePlain(context.Background(), "sys", "list files")
 	if err != nil {
 		t.Fatalf("GeneratePlain: %v", err)
@@ -61,7 +61,7 @@ func TestGenerateExplain_ReturnsToolCallArgs(t *testing.T) {
 	defer srv.Close()
 
 	c := New("k", "m", 256)
-	c.Endpoint = srv.URL
+	c.endpoint = srv.URL
 	out, err := c.GenerateExplain(context.Background(), "sys", "task")
 	if err != nil {
 		t.Fatalf("GenerateExplain: %v", err)
@@ -78,7 +78,7 @@ func TestGeneratePlain_APIErrorIsReturned(t *testing.T) {
 	}))
 	defer srv.Close()
 	c := New("k", "m", 256)
-	c.Endpoint = srv.URL
+	c.endpoint = srv.URL
 	_, err := c.GeneratePlain(context.Background(), "s", "t")
 	if err == nil || !strings.Contains(err.Error(), "bad model") {
 		t.Errorf("err = %v", err)
@@ -87,8 +87,8 @@ func TestGeneratePlain_APIErrorIsReturned(t *testing.T) {
 
 func TestNewWithBase_BuildsEndpoint(t *testing.T) {
 	c := NewWithBase("k", "m", 0, "https://example.com/")
-	if c.Endpoint != "https://example.com/v1/chat/completions" {
-		t.Errorf("Endpoint = %q", c.Endpoint)
+	if c.endpoint != "https://example.com/v1/chat/completions" {
+		t.Errorf("endpoint = %q", c.endpoint)
 	}
 }
 
@@ -97,7 +97,7 @@ func TestName_Defaults(t *testing.T) {
 	if c.Name() != "openai" {
 		t.Errorf("Name = %q", c.Name())
 	}
-	c.ProviderName = "codex"
+	c.providerName = "codex"
 	if c.Name() != "codex" {
 		t.Errorf("Name = %q after override", c.Name())
 	}

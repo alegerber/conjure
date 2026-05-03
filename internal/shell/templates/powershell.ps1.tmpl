@@ -3,8 +3,8 @@
 #     conjure shell-init powershell | Out-String | Invoke-Expression
 
 if (-not (Get-Command conjure -ErrorAction SilentlyContinue)) {
-    Write-Error "conjure: 'conjure' not found on PATH."
-    return
+    $Global:LASTEXITCODE = 1
+    throw "conjure: 'conjure' not found on PATH."
 }
 
 function cj {

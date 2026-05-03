@@ -4,7 +4,8 @@
 
 if not type -q conjure
     echo "conjure: 'conjure' not found on PATH." >&2
-    exit 1
+    return 1 2>/dev/null
+    or exit 1
 end
 
 function cj

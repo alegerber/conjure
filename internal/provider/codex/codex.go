@@ -61,6 +61,6 @@ func New(authFile, model string, maxTokens int) (provider.Provider, error) {
 		return nil, err
 	}
 	c := openai.New(key, model, maxTokens)
-	c.ProviderName = string(provider.KindCodex)
+	c.SetProviderName(string(provider.KindCodex))
 	return c, nil
 }

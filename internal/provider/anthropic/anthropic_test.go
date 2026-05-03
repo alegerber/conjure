@@ -47,7 +47,7 @@ func TestGeneratePlain_StripsFencesAndReturnsCommand(t *testing.T) {
 	defer srv.Close()
 
 	c := New("test-key", "claude-haiku-4-5", 256)
-	c.Endpoint = srv.URL
+	c.endpoint = srv.URL
 
 	got, err := c.GeneratePlain(context.Background(), "system text", "list md files")
 	if err != nil {
@@ -59,27 +59,6 @@ func TestGeneratePlain_StripsFencesAndReturnsCommand(t *testing.T) {
 	}
 }
 
-func TestStripFences_PreservesInnerBackticks(t *testing.T) {
-	cases := []struct {
-		name, in, want string
-	}{
-		{"plain", "ls -la", "ls -la"},
-		{"fenced", "```\nls -la\n```", "ls -la"},
-		{"fenced with lang", "```sh\nls -la\n```", "ls -la"},
-		{"inline backticks", "`ls -la`", "ls -la"},
-		{"command with inner backticks", "echo `date`", "echo `date`"},
-		{"fenced with inner backticks", "```\necho `date`\n```", "echo `date`"},
-		{"surrounding whitespace", "  \nls\n  ", "ls"},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			if got := stripFences(tc.in); got != tc.want {
-				t.Errorf("stripFences(%q) = %q, want %q", tc.in, got, tc.want)
-			}
-		})
-	}
-}
-
 func TestGeneratePlain_APIErrorIsReturned(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
@@ -88,7 +67,7 @@ func TestGeneratePlain_APIErrorIsReturned(t *testing.T) {
 	defer srv.Close()
 
 	c := New("k", "m", 256)
-	c.Endpoint = srv.URL
+	c.endpoint = srv.URL
 	_, err := c.GeneratePlain(context.Background(), "s", "t")
 	if err == nil || !strings.Contains(err.Error(), "bad model") {
 		t.Errorf("err = %v, want contain 'bad model'", err)
@@ -125,7 +104,7 @@ func TestGenerateExplain_ReturnsCommandAndExplanation(t *testing.T) {
 	defer srv.Close()
 
 	c := New("k", "m", 256)
-	c.Endpoint = srv.URL
+	c.endpoint = srv.URL
 	out, err := c.GenerateExplain(context.Background(), "sys", "list files")
 	if err != nil {
 		t.Fatalf("GenerateExplain: %v", err)
