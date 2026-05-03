@@ -20,6 +20,7 @@ import (
 	"github.com/alegerber/conjure/internal/provider/factory"
 	openaiprov "github.com/alegerber/conjure/internal/provider/openai"
 	"github.com/alegerber/conjure/internal/runner"
+	"github.com/alegerber/conjure/internal/sanitize"
 )
 
 type generateOpts struct {
@@ -129,6 +130,12 @@ func runGenerate(cfg *config.Config, opts generateOpts, description string) erro
 			return err
 		}
 		cmdLine = out
+	}
+
+	cmdLine = sanitize.CommandLine(cmdLine)
+	explanation = sanitize.CommandLine(explanation)
+	if cmdLine == "" {
+		return fmt.Errorf("model returned no command after sanitization")
 	}
 
 	for _, h := range heuristic.CheckGNU(cmdLine, osHint) {
