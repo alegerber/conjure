@@ -53,8 +53,3 @@ type APIError struct {
 	Type    string `json:"type"`
 	Message string `json:"message"`
 }
-
-type EmitCommandInput struct {
-	Command     string `json:"command"`
-	Explanation string `json:"explanation"`
-}
