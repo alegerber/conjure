@@ -8,9 +8,9 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"strings"
 
 	"github.com/alegerber/conjure/internal/provider"
+	"github.com/alegerber/conjure/internal/provider/textutil"
 )
 
 const (
@@ -24,20 +24,20 @@ const (
 )
 
 type Client struct {
-	APIKey     string
+	apiKey     string
 	Model      string
 	MaxTokens  int
 	HTTPClient *http.Client
-	Endpoint   string // override for tests
+	endpoint   string
 }
 
 func New(apiKey, model string, maxTokens int) *Client {
 	return &Client{
-		APIKey:     apiKey,
+		apiKey:     apiKey,
 		Model:      model,
 		MaxTokens:  maxTokens,
 		HTTPClient: http.DefaultClient,
-		Endpoint:   endpoint,
+		endpoint:   endpoint,
 	}
 }
 
@@ -61,7 +61,7 @@ func (c *Client) GeneratePlain(ctx context.Context, systemPrompt, task string) (
 	if len(resp.Content) == 0 || resp.Content[0].Text == "" {
 		return "", fmt.Errorf("empty response")
 	}
-	return stripFences(resp.Content[0].Text), nil
+	return textutil.StripFences(resp.Content[0].Text), nil
 }
 
 func (c *Client) do(ctx context.Context, body Request) (*Response, error) {
@@ -69,11 +69,11 @@ func (c *Client) do(ctx context.Context, body Request) (*Response, error) {
 	if err != nil {
 		return nil, fmt.Errorf("marshal request: %w", err)
 	}
-	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, c.Endpoint, bytes.NewReader(buf))
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, c.endpoint, bytes.NewReader(buf))
 	if err != nil {
 		return nil, err
 	}
-	httpReq.Header.Set("x-api-key", c.APIKey)
+	httpReq.Header.Set("x-api-key", c.apiKey)
 	httpReq.Header.Set("anthropic-version", anthropicAPIVer)
 	httpReq.Header.Set("content-type", "application/json")
 
@@ -143,24 +143,3 @@ func (c *Client) GenerateExplain(ctx context.Context, systemPrompt, task string)
 	return nil, fmt.Errorf("no tool_use block in response")
 }
 
-// stripFences removes a leading/trailing markdown code fence and surrounding
-// whitespace, returning the first non-empty line. Mirrors the bash version.
-func stripFences(s string) string {
-	s = strings.TrimSpace(s)
-	lines := strings.Split(s, "\n")
-	if len(lines) > 0 && strings.HasPrefix(strings.TrimSpace(lines[0]), "```") {
-		lines = lines[1:]
-	}
-	if len(lines) > 0 && strings.TrimSpace(lines[len(lines)-1]) == "```" {
-		lines = lines[:len(lines)-1]
-	}
-	for _, line := range lines {
-		if t := strings.TrimSpace(line); t != "" {
-			if len(t) >= 2 && strings.HasPrefix(t, "`") && strings.HasSuffix(t, "`") {
-				return t[1 : len(t)-1]
-			}
-			return t
-		}
-	}
-	return ""
-}

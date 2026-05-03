@@ -20,7 +20,7 @@ func ConfirmAndRun(cmd string, in io.Reader, out io.Writer) error {
 	_, _ = fmt.Fprintf(out, "Run this command? [y/N]\n  %s\n> ", cmd)
 	reader := bufio.NewReader(in)
 	ans, err := reader.ReadString('\n')
-	if err != nil && err != io.EOF {
+	if err != nil && !errors.Is(err, io.EOF) {
 		return fmt.Errorf("read confirmation: %w", err)
 	}
 	ans = strings.TrimSpace(strings.ToLower(ans))
@@ -36,5 +36,8 @@ func ConfirmAndRun(cmd string, in io.Reader, out io.Writer) error {
 	}
 	c.Stdout = out
 	c.Stderr = os.Stderr
-	return c.Run()
+	if err := c.Run(); err != nil {
+		return fmt.Errorf("command failed: %w", err)
+	}
+	return nil
 }

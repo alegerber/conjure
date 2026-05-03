@@ -18,18 +18,26 @@ const (
 	KindClaudeCLI Kind = "claude-cli"
 )
 
-// AllKinds lists every supported provider kind in the order shown to users.
-var AllKinds = []Kind{KindAnthropic, KindOpenAI, KindOllama, KindCodex, KindClaudeCLI}
+// allKinds lists every supported provider kind in the order shown to users.
+// Kept private so callers can't mutate the slice in place; expose via Kinds().
+var allKinds = []Kind{KindAnthropic, KindOpenAI, KindOllama, KindCodex, KindClaudeCLI}
+
+// Kinds returns a copy of the supported provider kinds in display order.
+func Kinds() []Kind {
+	out := make([]Kind, len(allKinds))
+	copy(out, allKinds)
+	return out
+}
 
 // ParseKind validates and converts a string to a Kind.
 func ParseKind(s string) (Kind, error) {
 	k := Kind(s)
-	for _, v := range AllKinds {
+	for _, v := range allKinds {
 		if v == k {
 			return k, nil
 		}
 	}
-	return "", fmt.Errorf("unknown provider %q (want one of: %v)", s, AllKinds)
+	return "", fmt.Errorf("unknown provider %q (want one of: %v)", s, allKinds)
 }
 
 // EmitCommand is the structured payload returned by GenerateExplain.

@@ -2,6 +2,7 @@ package runner
 
 import (
 	"bytes"
+	"errors"
 	"strings"
 	"testing"
 )
@@ -10,7 +11,7 @@ func TestConfirmAndRun_DeniedReturnsErrAborted(t *testing.T) {
 	in := strings.NewReader("n\n")
 	var out bytes.Buffer
 	err := ConfirmAndRun("echo skip", in, &out)
-	if err != ErrAborted {
+	if !errors.Is(err, ErrAborted) {
 		t.Errorf("err = %v, want ErrAborted", err)
 	}
 }

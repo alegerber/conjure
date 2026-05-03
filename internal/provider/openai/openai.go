@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/alegerber/conjure/internal/provider"
+	"github.com/alegerber/conjure/internal/provider/textutil"
 )
 
 const (
@@ -22,15 +23,14 @@ const (
 	EnvVar = "OPENAI_API_KEY"
 )
 
-// Client is the OpenAI Chat Completions client. The Endpoint field is exposed
-// so tests can point it at httptest.Server.
+// Client is the OpenAI Chat Completions client.
 type Client struct {
-	APIKey       string
+	apiKey       string
 	Model        string
 	MaxTokens    int
 	HTTPClient   *http.Client
-	Endpoint     string
-	ProviderName string // overridden by codex wrapper; defaults to "openai".
+	endpoint     string
+	providerName string // overridden by codex wrapper; defaults to "openai".
 }
 
 func New(apiKey, model string, maxTokens int) *Client {
@@ -45,21 +45,26 @@ func NewWithBase(apiKey, model string, maxTokens int, baseURL string) *Client {
 		ep = strings.TrimRight(baseURL, "/") + "/v1/chat/completions"
 	}
 	return &Client{
-		APIKey:       apiKey,
+		apiKey:       apiKey,
 		Model:        model,
 		MaxTokens:    maxTokens,
 		HTTPClient:   http.DefaultClient,
-		Endpoint:     ep,
-		ProviderName: string(provider.KindOpenAI),
+		endpoint:     ep,
+		providerName: string(provider.KindOpenAI),
 	}
 }
 
 func (c *Client) Name() string {
-	if c.ProviderName == "" {
+	if c.providerName == "" {
 		return string(provider.KindOpenAI)
 	}
-	return c.ProviderName
+	return c.providerName
 }
+
+// SetProviderName overrides the provider name reported by Name(). Used by
+// wrappers (e.g. the codex package) that reuse this client against a
+// different upstream identity.
+func (c *Client) SetProviderName(name string) { c.providerName = name }
 
 type message struct {
 	Role    string `json:"role"`
@@ -150,7 +155,7 @@ func (c *Client) GeneratePlain(ctx context.Context, systemPrompt, task string) (
 	if len(resp.Choices) == 0 || resp.Choices[0].Message.Content == "" {
 		return "", fmt.Errorf("empty response")
 	}
-	return stripFences(resp.Choices[0].Message.Content), nil
+	return textutil.StripFences(resp.Choices[0].Message.Content), nil
 }
 
 func (c *Client) GenerateExplain(ctx context.Context, systemPrompt, task string) (*provider.EmitCommand, error) {
@@ -194,11 +199,11 @@ func (c *Client) do(ctx context.Context, body chatRequest) (*chatResponse, error
 	if err != nil {
 		return nil, fmt.Errorf("marshal request: %w", err)
 	}
-	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, c.Endpoint, bytes.NewReader(buf))
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, c.endpoint, bytes.NewReader(buf))
 	if err != nil {
 		return nil, err
 	}
-	httpReq.Header.Set("Authorization", "Bearer "+c.APIKey)
+	httpReq.Header.Set("Authorization", "Bearer "+c.apiKey)
 	httpReq.Header.Set("content-type", "application/json")
 
 	httpResp, err := c.HTTPClient.Do(httpReq)
@@ -222,22 +227,3 @@ func (c *Client) do(ctx context.Context, body chatRequest) (*chatResponse, error
 	return &resp, nil
 }
 
-func stripFences(s string) string {
-	s = strings.TrimSpace(s)
-	lines := strings.Split(s, "\n")
-	if len(lines) > 0 && strings.HasPrefix(strings.TrimSpace(lines[0]), "```") {
-		lines = lines[1:]
-	}
-	if len(lines) > 0 && strings.TrimSpace(lines[len(lines)-1]) == "```" {
-		lines = lines[:len(lines)-1]
-	}
-	for _, line := range lines {
-		if t := strings.TrimSpace(line); t != "" {
-			if len(t) >= 2 && strings.HasPrefix(t, "`") && strings.HasSuffix(t, "`") {
-				return t[1 : len(t)-1]
-			}
-			return t
-		}
-	}
-	return ""
-}
