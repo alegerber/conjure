@@ -1,6 +1,8 @@
 package clipboard
 
 import (
+	"errors"
+	"os/exec"
 	"runtime"
 	"testing"
 )
@@ -20,7 +22,9 @@ func TestNew_PicksOSAppropriateBackend(t *testing.T) {
 			t.Errorf("windows source = %q", c.Source())
 		}
 	case "linux":
-		if c.Source() != "wl-copy" && c.Source() != "xclip" {
+		switch c.Source() {
+		case "wl-copy", "xclip", "xsel":
+		default:
 			t.Errorf("linux source = %q", c.Source())
 		}
 	}
@@ -40,16 +44,44 @@ func TestNew_LinuxPicksWaylandWhenDisplaySet(t *testing.T) {
 	}
 }
 
-func TestNew_LinuxFallsBackToXclipWithoutWayland(t *testing.T) {
+func TestNew_LinuxX11PrefersXclipOverXsel(t *testing.T) {
 	if runtime.GOOS != "linux" {
 		t.Skip("linux only")
 	}
 	t.Setenv("WAYLAND_DISPLAY", "")
+
+	_, xclipErr := exec.LookPath("xclip")
+	_, xselErr := exec.LookPath("xsel")
+	if xclipErr != nil && xselErr != nil {
+		t.Skip("neither xclip nor xsel on PATH")
+	}
+
 	c, err := New()
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
-	if c.Source() != "xclip" {
-		t.Errorf("without WAYLAND_DISPLAY, want xclip, got %q", c.Source())
+	wantSource := "xsel"
+	if xclipErr == nil {
+		wantSource = "xclip" // xclip wins when both present
+	}
+	if c.Source() != wantSource {
+		t.Errorf("source = %q, want %q (xclip available=%v, xsel available=%v)",
+			c.Source(), wantSource, xclipErr == nil, xselErr == nil)
+	}
+}
+
+func TestNew_LinuxX11ErrorsWhenNoBackendInstalled(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("linux only")
+	}
+	t.Setenv("WAYLAND_DISPLAY", "")
+	t.Setenv("PATH", "") // empty PATH makes exec.LookPath fail for every command
+
+	_, err := New()
+	if err == nil {
+		t.Fatal("New: want error when no clipboard backend on PATH")
+	}
+	if !errors.Is(err, ErrUnavailable) {
+		t.Errorf("err = %v, want errors.Is(err, ErrUnavailable)", err)
 	}
 }
