@@ -11,7 +11,7 @@ find . -type f -mtime -7
 # Finds all files modified within the last 7 days, recursively from the current directory.
 
 $ cj "show top 3 largest directories"
-# (zsh-only) command lands editable in the next prompt, ready to edit or run
+# command lands editable in the next prompt, ready to edit or run
 ```
 
 A small CLI that turns natural-language descriptions into single-line Unix
@@ -31,10 +31,11 @@ output quality on macOS (BSD coreutils).
 
 ## Requirements
 
-- macOS (uses Keychain via `security`) — Linux support is on the roadmap
-- `curl`, `jq` (`brew install jq`)
-- An Anthropic API key — get one at
-  [console.anthropic.com/settings/keys](https://console.anthropic.com/settings/keys)
+- Go 1.25+ (`brew install go`) to build from source
+- macOS, Linux, or Windows — credentials use the OS keyring
+  (Keychain / Secret Service / Credential Manager)
+- An API key for one of the supported providers (or a local Ollama / a
+  signed-in `codex` / `claude` CLI)
 
 ## Install
 
@@ -44,12 +45,19 @@ cd ~/github/conjure
 ./install.sh
 ```
 
-The installer creates a symlink at `~/.local/bin/conjure` (override with
-`BIN_DIR=`) and, if oh-my-zsh is detected, links the optional zsh plugin
-(adds the `cj` short alias and tab completion).
+The installer runs `go install ./cmd/conjure` (binary lands in
+`${GOBIN:-$GOPATH/bin}`, typically `~/go/bin/conjure`) and symlinks it into
+`~/.local/bin/conjure` so the binary stays on `$PATH` at a stable location.
+Override the symlink dir with `BIN_DIR=`. Future `go install ./cmd/conjure`
+runs keep both paths in sync — no need to re-run the installer for upgrades.
 
-Make sure `~/.local/bin` is on your `$PATH`. If you use the zsh plugin, add
-`conjure` to your `plugins=(...)` array in `~/.zshrc`.
+Make sure `~/.local/bin` is on your `$PATH`. For the `cj()` shell helper
+(drops the generated command into your input buffer instead of printing it),
+append this to your shell rc:
+
+```sh
+eval "$(conjure shell-init zsh)"     # or: bash | fish | powershell
+```
 
 ## First-time setup
 
@@ -71,7 +79,7 @@ the OS-aware system prompt details.
 conjure "<description>"          # plain command, ~0.85s
 conjure -e "<description>"       # command + brief explanation, ~1.3s
 conjure --no-explain "..."       # force plain output (overrides config explain=true)
-cj "<description>"               # zsh-only: pushes command into the editor buffer
+cj "<description>"               # pushes command into the shell input buffer (see Install)
 ```
 
 ### Piping the result
@@ -95,10 +103,12 @@ Each call uses ~200 input + ~80 output tokens with Haiku 4.5 → about
 cd ~/github/conjure && ./install.sh --uninstall
 ```
 
-This removes the symlinks. Your API key in Keychain is kept by default;
-remove it with:
+This removes the `~/.local/bin/conjure` symlink. The binary in
+`${GOBIN:-$GOPATH/bin}` and your API key in the keyring are kept by default;
+remove them with:
 
 ```sh
+rm "$(go env GOBIN || go env GOPATH)/bin/conjure"        # or: ~/go/bin/conjure
 security delete-generic-password -a "$USER" -s "anthropic-api-key"
 ```
 
