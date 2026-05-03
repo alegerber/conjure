@@ -43,7 +43,8 @@ conjure/
 │   ├── runner/                 # `--run` confirm prompt + exec
 │   └── shell/                  # embedded shell-init templates + Render()
 ├── docs/
-│   └── MIGRATION.md            # 0.1.x bash → 0.2.0 Go upgrade notes
+│   ├── CONFIGURATION.md       # config-file reference
+│   └── PROVIDERS.md           # provider matrix and notes
 ├── install.sh                  # bootstrap installer (downloads release binary)
 ├── README.md                   # user-facing docs
 ├── AGENTS.md                   # this file

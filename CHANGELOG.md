@@ -65,14 +65,13 @@ considered stable; future breaking changes will bump the major version.
 
 ### Changed
 - Complete rewrite from bash to Go. Single static binary; no `curl`/`jq`
-  runtime dependency. See [docs/MIGRATION.md](docs/MIGRATION.md).
+  runtime dependency.
 - `conjure --setup` becomes `conjure setup`; the oh-my-zsh plugin is
   replaced by `eval "$(conjure shell-init <shell>)"`.
 
 ## [0.1.x]
 
-Initial bash implementation. Superseded by 0.2.0; see
-[docs/MIGRATION.md](docs/MIGRATION.md) for upgrade steps.
+Initial, unreleased bash implementation. Superseded by 0.2.0.
 
 [Unreleased]: https://github.com/alegerber/conjure/compare/v1.0.0...HEAD
 [1.0.0]: https://github.com/alegerber/conjure/releases/tag/v1.0.0
