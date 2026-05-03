@@ -24,12 +24,13 @@ import (
 )
 
 type generateOpts struct {
-	explain  bool
-	noEx     bool
-	copy     bool
-	run      bool
-	provider string
-	model    string
+	explain    bool
+	noEx       bool
+	copy       bool
+	run        bool
+	provider   string
+	model      string
+	ollamaHost string
 }
 
 const defaultMaxTokens = 256
@@ -91,7 +92,7 @@ func resolveProvider(cfg *config.Config, opts generateOpts) (provider.Provider, 
 		key = k
 		spec.BaseURL = cfg.OpenAIBaseURL
 	case provider.KindOllama:
-		spec.BaseURL = cfg.OllamaHost
+		spec.BaseURL = resolveOllamaHost(opts.ollamaHost, cfg.OllamaHost)
 		if spec.Model == "" {
 			return nil, fmt.Errorf("ollama: no model configured. Set with --model or `conjure setup`")
 		}
@@ -186,6 +187,20 @@ func attachGenerateFlags(cmd *cobra.Command, opts *generateOpts) {
 	cmd.Flags().BoolVar(&opts.run, "run", false, "After printing, prompt to execute the command")
 	cmd.Flags().StringVar(&opts.provider, "provider", "", "Override configured provider (anthropic|openai|ollama|codex|claude-cli)")
 	cmd.Flags().StringVar(&opts.model, "model", "", "Override configured model")
+	cmd.Flags().StringVar(&opts.ollamaHost, "ollama-host", "", "Override Ollama host URL (precedence: flag > $OLLAMA_HOST > config)")
+}
+
+// resolveOllamaHost picks the ollama host with precedence: --ollama-host flag
+// > $OLLAMA_HOST env var > config file > default (handled downstream by
+// ollama.New). An empty result means "use the default".
+func resolveOllamaHost(flagVal, cfgVal string) string {
+	if flagVal != "" {
+		return flagVal
+	}
+	if env := os.Getenv("OLLAMA_HOST"); env != "" {
+		return env
+	}
+	return cfgVal
 }
 
 // rootRunE is wired into the root command so `conjure "<description>"` works
